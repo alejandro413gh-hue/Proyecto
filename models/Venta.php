@@ -64,15 +64,15 @@ class Venta {
             $s->execute();
             $vid = $conn->insert_id;
 
+            // Verificar columna talla UNA SOLA VEZ antes del loop (no dentro del loop)
+            $chk = $conn->query("SHOW COLUMNS FROM detalle_venta LIKE 'talla'");
+            if ($chk->num_rows === 0) {
+                $conn->query("ALTER TABLE detalle_venta ADD COLUMN talla VARCHAR(20) NULL AFTER cantidad");
+            }
+
             foreach ($productos as $p) {
                 $sub   = $p['precio'] * $p['cantidad'];
                 $talla = isset($p['talla']) && $p['talla'] !== '' ? $p['talla'] : null;
-
-                // Verificar columna talla existe
-                $chk = $conn->query("SHOW COLUMNS FROM detalle_venta LIKE 'talla'");
-                if ($chk->num_rows === 0) {
-                    $conn->query("ALTER TABLE detalle_venta ADD COLUMN talla VARCHAR(20) NULL AFTER cantidad");
-                }
 
                 $s2 = $conn->prepare(
                     "INSERT INTO detalle_venta (venta_id, producto_id, cantidad, talla, precio_unitario, subtotal) VALUES (?,?,?,?,?,?)"

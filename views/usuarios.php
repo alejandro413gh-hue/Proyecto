@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rol    = $_POST['rol']         ?? 'vendedor';
         if (empty($nombre)||empty($email)||empty($pass)) { $error='Todos los campos son obligatorios'; }
         elseif (strlen($pass)<6) { $error='La contraseña debe tener mínimo 6 caracteres'; }
-        elseif (!in_array($rol,['administrador','vendedor','gestor_inventario'])) { $error='Rol inválido'; }
+        elseif (!in_array($rol,['administrador','vendedor'])) { $error='Rol inválido'; }
         else {
             $r = $um->create($nombre,$email,$pass,$rol);
             if (isset($r['success'])) $msg='Usuario creado correctamente';
@@ -30,11 +30,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id     = intval($_POST['id']??0);
         $nombre = trim($_POST['nombre']??'');
         $email  = trim($_POST['email'] ??'');
-        $rol    = trim($_POST['rol']   ?? 'vendedor');
+        $rol    = $_POST['rol']        ?? 'vendedor';
         $activo = intval($_POST['activo']??1);
         if ($id<=0||empty($nombre)||empty($email)) { $error='Datos inválidos'; }
-        elseif (!in_array($rol,['administrador','vendedor','gestor_inventario'])) { $error='Rol inválido'; }
-        elseif ($id===$_SESSION['user_id']&&$rol!=='administrador') { $error='No puedes quitarte el rol de administrador a ti mismo'; }
+        elseif ($id===$_SESSION['user_id']&&$rol!=='administrador') { $error='No puedes quitarte el rol de administrador'; }
         else {
             $r=$um->update($id,$nombre,$email,$rol,$activo);
             if (isset($r['success'])) $msg='Usuario actualizado correctamente';

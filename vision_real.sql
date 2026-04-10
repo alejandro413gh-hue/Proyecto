@@ -140,7 +140,10 @@ INSERT INTO categorias (nombre, descripcion) VALUES
 ('Caballero - Formal', 'Ropa formal para caballero'),
 ('Accesorios',       'Accesorios y complementos');
 
--- Contraseña de ambos usuarios: password
+-- IMPORTANTE: Cambia estas contraseñas inmediatamente después de instalar.
+-- Contraseña de ambos usuarios por defecto: password
+-- USA: UPDATE usuarios SET password=PASSWORD_HASH('tu_nueva_clave') WHERE email='admin@visionreal.com';
+-- O inicia sesión y cambia desde el perfil de usuario.
 INSERT INTO usuarios (nombre, email, password, rol) VALUES
 ('Administrador',  'admin@visionreal.com',    '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'administrador'),
 ('Vendedor Demo',  'vendedor@visionreal.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'vendedor');

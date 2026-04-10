@@ -73,15 +73,20 @@ class Descuento {
     }
 
     public function getActivos() {
-        $hoy=date('Y-m-d');
-        $r=$this->db->query("SELECT d.*,c.nombre as cat_nombre,p.nombre as prod_nombre
+        $hoy = date('Y-m-d');
+        $s = $this->db->prepare(
+            "SELECT d.*, c.nombre as cat_nombre, p.nombre as prod_nombre
             FROM descuentos d
             LEFT JOIN categorias c ON d.aplica_categoria_id=c.id
             LEFT JOIN productos  p ON d.aplica_producto_id=p.id
             WHERE d.activo=1
-              AND (d.fecha_inicio IS NULL OR d.fecha_inicio<='$hoy')
-              AND (d.fecha_fin   IS NULL OR d.fecha_fin  >='$hoy')
-            ORDER BY d.valor DESC");
+              AND (d.fecha_inicio IS NULL OR d.fecha_inicio<=?)
+              AND (d.fecha_fin   IS NULL OR d.fecha_fin  >=?)
+            ORDER BY d.valor DESC"
+        );
+        $s->bind_param("ss", $hoy, $hoy);
+        $s->execute();
+        $r = $s->get_result();
         $a=[]; while($row=$r->fetch_assoc()) $a[]=$row; return $a;
     }
 
@@ -99,10 +104,15 @@ class Descuento {
         }
 
         $subtotal=array_sum(array_map(fn($i)=>$i['precio']*$i['cantidad'],$items));
-        $r=$this->db->query("SELECT * FROM descuentos WHERE activo=1
-            AND (fecha_inicio IS NULL OR fecha_inicio<='$hoy')
-            AND (fecha_fin   IS NULL OR fecha_fin  >='$hoy')
-            ORDER BY valor DESC");
+        $s_desc = $this->db->prepare(
+            "SELECT * FROM descuentos WHERE activo=1
+             AND (fecha_inicio IS NULL OR fecha_inicio<=?)
+             AND (fecha_fin   IS NULL OR fecha_fin  >=?)
+             ORDER BY valor DESC"
+        );
+        $s_desc->bind_param("ss", $hoy, $hoy);
+        $s_desc->execute();
+        $r = $s_desc->get_result();
 
         $mejorMonto=0; $mejorDesc=null;
 

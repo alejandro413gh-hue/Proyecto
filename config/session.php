@@ -1,5 +1,11 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    // Configuración segura de sesión
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_strict_mode', 1);
+    ini_set('session.cookie_samesite', 'Strict');
+    session_start();
+}
 
 function isLoggedIn()  { return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']); }
 

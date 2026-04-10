@@ -18,7 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
         // Devuelve tallas disponibles de un producto (sin login)
         $prod_id = intval($_GET['producto_id'] ?? 0);
         if (!$prod_id) { echo json_encode([]); exit(); }
-        $r = $db->query("SELECT talla, stock FROM producto_tallas WHERE producto_id = $prod_id AND stock > 0 ORDER BY FIELD(talla,'XS','S','M','L','XL','XXL','XXXL','Único') DESC, CAST(talla AS UNSIGNED) ASC, talla ASC");
+        $stmt = $db->prepare(
+            "SELECT talla, stock FROM producto_tallas WHERE producto_id = ? AND stock > 0 
+             ORDER BY FIELD(talla,'XS','S','M','L','XL','XXL','XXXL','Único') DESC, CAST(talla AS UNSIGNED) ASC, talla ASC"
+        );
+        $stmt->bind_param("i", $prod_id);
+        $stmt->execute();
+        $r = $stmt->get_result();
         $tallas = [];
         while($row = $r->fetch_assoc()) $tallas[] = $row;
         echo json_encode($tallas);
@@ -61,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'compr
     $direccion   = trim($_POST['direccion'] ?? '');
     $notas       = trim($_POST['notas'] ?? '');
     $promocion_id= intval($_POST['promocion_id'] ?? 0) ?: null;
-    $descuento   = floatval($_POST['descuento'] ?? 0);
+    // NO confiar en el descuento enviado por el cliente — recalcular en el servidor
     $cliente_id  = intval($_POST['cliente_id'] ?? 0) ?: null;
     $productos   = json_decode($_POST['productos'] ?? '[]', true);
 
@@ -69,14 +75,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'compr
     if (empty($nombre)) { echo json_encode(['error' => 'El nombre es obligatorio']); exit(); }
     if (empty($productos)) { echo json_encode(['error' => 'No hay productos en el carrito']); exit(); }
 
-    foreach ($productos as $p) {
-        if (!isset($p['producto_id'], $p['cantidad'], $p['precio'])) {
+    // Validar y re-verificar precios desde la base de datos (evitar manipulación del cliente)
+    foreach ($productos as &$p) {
+        if (!isset($p['producto_id'], $p['cantidad'])) {
             echo json_encode(['error' => 'Datos de productos inválidos']); exit();
         }
-        if ($p['cantidad'] <= 0 || $p['precio'] <= 0) {
-            echo json_encode(['error' => 'Cantidad o precio inválido']); exit();
+        if ($p['cantidad'] <= 0) {
+            echo json_encode(['error' => 'Cantidad debe ser mayor a 0']); exit();
         }
+        // Obtener precio real de la BD (no confiar en el precio enviado por el cliente)
+        $sp = $db->prepare("SELECT precio, stock, activo FROM productos WHERE id = ? AND activo = 1");
+        $sp->bind_param("i", $p['producto_id']);
+        $sp->execute();
+        $prod_real = $sp->get_result()->fetch_assoc();
+        if (!$prod_real) {
+            echo json_encode(['error' => 'Producto no encontrado o no disponible']); exit();
+        }
+        $p['precio'] = (float)$prod_real['precio']; // Usar precio real de BD
     }
+    unset($p);
 
     $conn = $db->getConnection();
     $conn->begin_transaction();
@@ -101,8 +118,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'compr
             }
         }
 
-        // 2. Calcular total
+        // 2. Calcular total (precios ya fueron verificados desde BD)
         $subtotal = array_sum(array_map(fn($p) => $p['precio'] * $p['cantidad'], $productos));
+        // Recalcular el descuento en el servidor (no usar el valor del cliente)
+        $descuento = 0;
+        if ($promocion_id) {
+            require_once __DIR__ . '/../models/Descuento.php';
+            $dm = new Descuento();
+            $items_calc = array_map(fn($p) => [
+                'producto_id'  => $p['producto_id'],
+                'categoria_id' => 0, // Se puede enriquecer si se necesita
+                'precio'       => $p['precio'],
+                'cantidad'     => $p['cantidad'],
+            ], $productos);
+            $mejor = $dm->calcularMejor($items_calc, $cliente_id);
+            if ($mejor) $descuento = $mejor['monto'];
+        }
         $total    = max(0, $subtotal - $descuento);
 
         // 3. Obtener usuario vendedor del sistema (usar el primer vendedor activo o admin)
@@ -122,14 +153,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'compr
         $s->execute();
         $venta_id = $conn->insert_id;
 
+        // Verificar columna talla UNA SOLA VEZ antes del loop
+        $ck = $conn->query("SHOW COLUMNS FROM detalle_venta LIKE 'talla'");
+        if ($ck->num_rows === 0) $conn->query("ALTER TABLE detalle_venta ADD COLUMN talla VARCHAR(20) NULL AFTER cantidad");
+
         // 5. Insertar detalle y descontar stock
         foreach ($productos as $p) {
             $sub          = $p['precio'] * $p['cantidad'];
             $talla_venta  = isset($p['talla']) && $p['talla'] !== '' ? $p['talla'] : null;
-
-            // Asegurar columna talla en detalle_venta
-            $ck = $conn->query("SHOW COLUMNS FROM detalle_venta LIKE 'talla'");
-            if ($ck->num_rows === 0) $conn->query("ALTER TABLE detalle_venta ADD COLUMN talla VARCHAR(20) NULL AFTER cantidad");
 
             $s2 = $conn->prepare(
                 "INSERT INTO detalle_venta (venta_id, producto_id, cantidad, talla, precio_unitario, subtotal) VALUES (?,?,?,?,?,?)"

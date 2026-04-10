@@ -30,7 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && puedeGestionarInventario()) {
         $imagen_nueva = null;
         if (isset($_FILES['imagen']) && !empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION));
-            if (!in_array($ext, ['jpg','jpeg','png','webp','gif'])) { $error = 'Formato no válido.'; }
+            $allowed_exts = ['jpg','jpeg','png','webp','gif'];
+            $allowed_mimes = ['image/jpeg','image/png','image/webp','image/gif'];
+            // Verificar tanto la extensión como el tipo MIME real del archivo (seguridad)
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime_real = finfo_file($finfo, $_FILES['imagen']['tmp_name']);
+            finfo_close($finfo);
+            if (!in_array($ext, $allowed_exts) || !in_array($mime_real, $allowed_mimes)) { $error = 'Formato no válido. Solo se permiten imágenes JPG, PNG, WEBP o GIF.'; }
             elseif ($_FILES['imagen']['size'] > 3*1024*1024) { $error = 'Imagen supera 3MB.'; }
             else {
                 $dir = __DIR__ . '/../assets/img/productos/';

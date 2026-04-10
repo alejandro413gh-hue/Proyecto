@@ -42,9 +42,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       <button type="submit" class="btn-login">Iniciar Sesión</button>
     </form>
     <div class="login-hint">
-      <strong style="color:var(--gold-light)">Demo:</strong>
-      admin@visionreal.com / <code>password</code><br>
-      vendedor@visionreal.com / <code>password</code>
+      <span style="color:var(--white-dim);font-size:.82rem">¿Problemas para ingresar? Contacta al administrador del sistema.</span>
     </div>
   </div>
 </div>

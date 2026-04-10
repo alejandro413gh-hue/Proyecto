@@ -12,10 +12,11 @@ class Database {
     private function __construct() {
         $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         if ($this->connection->connect_error) {
+            // Registrar el error real en el log del servidor (no mostrarlo al usuario)
+            error_log('DB Connection Error: ' . $this->connection->connect_error);
             die('<div style="font-family:sans-serif;padding:30px;color:#c0392b">
-                <h2>Error de conexión MySQL</h2>
-                <p>'.$this->connection->connect_error.'</p>
-                <p>Verifica que MySQL esté activo en XAMPP y que hayas importado database.sql</p>
+                <h2>Error de conexión</h2>
+                <p>No se puede conectar a la base de datos. Contacta al administrador.</p>
             </div>');
         }
         $this->connection->set_charset(DB_CHARSET);
