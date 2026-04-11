@@ -7,7 +7,6 @@ require_once __DIR__ . '/../models/Categoria.php';
 require_once __DIR__ . '/../models/Talla.php';
 
 $pm = new Producto(); $cm = new Categoria(); $tm = new Talla();
-$msg = ''; $error = '';
 
 // Verificar columna imagen
 $db = Database::getInstance();
@@ -18,21 +17,37 @@ if ($check->num_rows === 0) $db->query("ALTER TABLE productos ADD COLUMN imagen 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && puedeGestionarInventario()) {
     $action = $_POST['action'] ?? '';
     $id     = intval($_POST['id'] ?? 0);
+
+    // ✅ Eliminar no necesita validar nombre ni precio — procesarlo directamente
+    if ($action === 'delete' && $id > 0) {
+        $v = $pm->getById($id);
+        if (!empty($v['imagen'])) {
+            $rp = __DIR__ . '/../assets/img/productos/' . $v['imagen'];
+            if (file_exists($rp)) @unlink($rp);
+        }
+        $pm->delete($id);
+        header('Location: ' . BASE_URL . '/views/productos.php?msg=' . urlencode('Producto eliminado'));
+        exit();
+    }
+
     $nombre = trim($_POST['nombre'] ?? '');
     $desc   = trim($_POST['descripcion'] ?? '');
     $precio = floatval($_POST['precio'] ?? 0);
-    $stock  = intval($_POST['stock'] ?? 0);
     $cat    = intval($_POST['categoria_id'] ?? 0);
 
+    // Si el producto tiene tallas, ignorar el stock enviado (se calcula desde tallas)
+    $tieneTallas = ($id > 0) && $tm->tieneTallas($id);
+    $stock = $tieneTallas ? null : intval($_POST['stock'] ?? 0);
+
+    $error = '';
     if (empty($nombre)) { $error = 'El nombre es obligatorio'; }
     elseif ($precio <= 0) { $error = 'El precio debe ser mayor a 0'; }
     else {
         $imagen_nueva = null;
         if (isset($_FILES['imagen']) && !empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
             $ext = strtolower(pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION));
-            $allowed_exts = ['jpg','jpeg','png','webp','gif'];
+            $allowed_exts  = ['jpg','jpeg','png','webp','gif'];
             $allowed_mimes = ['image/jpeg','image/png','image/webp','image/gif'];
-            // Verificar tanto la extensión como el tipo MIME real del archivo (seguridad)
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             $mime_real = finfo_file($finfo, $_FILES['imagen']['tmp_name']);
             finfo_close($finfo);
@@ -48,24 +63,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && puedeGestionarInventario()) {
         }
         if (!$error) {
             $conn = $db->getConnection();
+            $ok = false;
             if ($action === 'create') {
-                if ($imagen_nueva) { $s=$conn->prepare("INSERT INTO productos (nombre,descripcion,precio,stock,categoria_id,imagen) VALUES(?,?,?,?,?,?)"); $s->bind_param("ssdiss",$nombre,$desc,$precio,$stock,$cat,$imagen_nueva); }
-                else { $s=$conn->prepare("INSERT INTO productos (nombre,descripcion,precio,stock,categoria_id) VALUES(?,?,?,?,?)"); $s->bind_param("ssdii",$nombre,$desc,$precio,$stock,$cat); }
-                if ($s&&$s->execute()) $msg='Producto registrado correctamente';
-                else $error='Error: '.$conn->error;
+                $stock_new = intval($_POST['stock'] ?? 0);
+                if ($imagen_nueva) { $s=$conn->prepare("INSERT INTO productos (nombre,descripcion,precio,stock,categoria_id,imagen) VALUES(?,?,?,?,?,?)"); $s->bind_param("ssdiss",$nombre,$desc,$precio,$stock_new,$cat,$imagen_nueva); }
+                else { $s=$conn->prepare("INSERT INTO productos (nombre,descripcion,precio,stock,categoria_id) VALUES(?,?,?,?,?)"); $s->bind_param("ssdii",$nombre,$desc,$precio,$stock_new,$cat); }
+                $ok = $s && $s->execute();
+                if ($ok) {
+                    // ✅ POST-REDIRECT-GET: evita el popup de reenvío al refrescar
+                    header('Location: ' . BASE_URL . '/views/productos.php?msg=' . urlencode('Producto registrado correctamente'));
+                    exit();
+                } else { $error = 'Error: ' . $conn->error; }
+
             } elseif ($action === 'update' && $id > 0) {
                 if ($imagen_nueva) {
                     $v=$pm->getById($id); if(!empty($v['imagen'])){$rp=__DIR__.'/../assets/img/productos/'.$v['imagen'];if(file_exists($rp))@unlink($rp);}
-                    $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,stock=?,categoria_id=?,imagen=? WHERE id=?"); $s->bind_param("ssdissi",$nombre,$desc,$precio,$stock,$cat,$imagen_nueva,$id);
-                } else { $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,stock=?,categoria_id=? WHERE id=?"); $s->bind_param("ssdiii",$nombre,$desc,$precio,$stock,$cat,$id); }
-                if ($s&&$s->execute()) $msg='Producto actualizado'; else $error='Error: '.$conn->error;
-            } elseif ($action === 'delete' && $id > 0) {
-                $v=$pm->getById($id); if(!empty($v['imagen'])){$rp=__DIR__.'/../assets/img/productos/'.$v['imagen'];if(file_exists($rp))@unlink($rp);}
-                $pm->delete($id); $msg='Producto eliminado';
+                    if ($tieneTallas) {
+                        $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,categoria_id=?,imagen=? WHERE id=?");
+                        $s->bind_param("ssdssi",$nombre,$desc,$precio,$cat,$imagen_nueva,$id);
+                    } else {
+                        $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,stock=?,categoria_id=?,imagen=? WHERE id=?");
+                        $s->bind_param("ssdissi",$nombre,$desc,$precio,$stock,$cat,$imagen_nueva,$id);
+                    }
+                } else {
+                    if ($tieneTallas) {
+                        $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,categoria_id=? WHERE id=?");
+                        $s->bind_param("ssdii",$nombre,$desc,$precio,$cat,$id);
+                    } else {
+                        $s=$conn->prepare("UPDATE productos SET nombre=?,descripcion=?,precio=?,stock=?,categoria_id=? WHERE id=?");
+                        $s->bind_param("ssdiii",$nombre,$desc,$precio,$stock,$cat,$id);
+                    }
+                }
+                $ok = $s && $s->execute();
+                if ($ok) {
+                    // ✅ POST-REDIRECT-GET
+                    header('Location: ' . BASE_URL . '/views/productos.php?msg=' . urlencode('Producto actualizado correctamente'));
+                    exit();
+                } else { $error = 'Error: ' . $conn->error; }
+
             }
         }
     }
+    // Si hay error, guardar en sesión y redirigir igual (muestra el error sin dejar el POST)
+    if (!empty($error)) {
+        $_SESSION['flash_error'] = $error;
+        header('Location: ' . BASE_URL . '/views/productos.php');
+        exit();
+    }
 }
+
+// Leer mensajes flash de sesión o de URL
+$msg   = $_GET['msg']   ?? ($_SESSION['flash_msg']   ?? '');
+$error = $_GET['error'] ?? ($_SESSION['flash_error'] ?? '');
+unset($_SESSION['flash_msg'], $_SESSION['flash_error']);
 
 $productos  = $pm->getAll();
 $categorias = $cm->getAll();
@@ -175,6 +225,7 @@ include __DIR__ . '/partials/head.php';
                 <span style="display:none" class="d-stock"><?=$p['stock']?></span>
                 <span style="display:none" class="d-cat"><?=(int)$p['categoria_id']?></span>
                 <span style="display:none" class="d-img"><?=htmlspecialchars($p['imagen']??'',ENT_QUOTES)?></span>
+                <span style="display:none" class="d-tallas"><?=count($tallas)?></span>
               </td>
               <?php endif; ?>
             </tr>
@@ -201,7 +252,12 @@ include __DIR__ . '/partials/head.php';
       <div class="form-grid">
         <div class="form-group span-2"><label>Nombre *</label><input type="text" name="nombre" id="f-nombre" required></div>
         <div class="form-group"><label>Precio (COP) *</label><input type="number" name="precio" id="f-precio" min="1" step="1" required></div>
-        <div class="form-group"><label>Stock General *</label><input type="number" name="stock" id="f-stock" min="0" step="1" required></div>
+        <div class="form-group"><label>Stock General *</label>
+          <input type="number" name="stock" id="f-stock" min="0" step="1" required>
+          <div id="stock-aviso" style="display:none;margin-top:6px;padding:8px 12px;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);border-radius:7px;font-size:.78rem;color:var(--gold-light)">
+            📦 Este producto tiene tallas configuradas. El stock se calcula automáticamente como la suma de todas las tallas. Edítalo desde el botón <strong>Tallas</strong>.
+          </div>
+        </div>
         <div class="form-group span-2"><label>Categoría</label>
           <select name="categoria_id" id="f-cat">
             <option value="0">— Sin categoría —</option>
@@ -301,6 +357,11 @@ function abrirNuevo() {
   document.getElementById('f-action').value='create'; document.getElementById('f-id').value='';
   ['f-nombre','f-precio','f-stock','f-desc'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-cat').value='0';
+  // Nuevo producto: desbloquear stock y ocultar aviso
+  const si = document.getElementById('f-stock');
+  si.disabled = false; si.style.opacity = '1'; si.title = '';
+  const sa = document.getElementById('stock-aviso');
+  if (sa) sa.style.display = 'none';
   document.getElementById('img-actual-wrap').style.display='none';
   resetImg(); document.getElementById('overlay-prod').style.display='flex';
 }
@@ -313,12 +374,30 @@ function abrirEditar(btn) {
   document.getElementById('f-nombre').value=td.querySelector('.d-nombre').textContent.trim();
   document.getElementById('f-desc').value  =td.querySelector('.d-desc').textContent.trim();
   document.getElementById('f-precio').value=td.querySelector('.d-precio').textContent.trim();
-  document.getElementById('f-stock').value =td.querySelector('.d-stock').textContent.trim();
   document.getElementById('f-cat').value   =td.querySelector('.d-cat').textContent.trim();
   const img=td.querySelector('.d-img').textContent.trim();
   const wrap=document.getElementById('img-actual-wrap');
   if(img){document.getElementById('img-actual').src='<?=BASE_URL?>/assets/img/productos/'+img;wrap.style.display='flex';}
   else wrap.style.display='none';
+
+  // Si el producto tiene tallas configuradas, bloquear el campo stock
+  const tieneTallas = td.querySelector('.d-tallas') && td.querySelector('.d-tallas').textContent.trim() !== '0';
+  const stockInput  = document.getElementById('f-stock');
+  const stockAviso  = document.getElementById('stock-aviso');
+  if (tieneTallas) {
+    stockInput.value    = td.querySelector('.d-stock').textContent.trim();
+    stockInput.disabled = true;
+    stockInput.style.opacity = '0.5';
+    stockInput.title = 'El stock se calcula automáticamente desde las tallas';
+    if (stockAviso) stockAviso.style.display = 'block';
+  } else {
+    stockInput.value    = td.querySelector('.d-stock').textContent.trim();
+    stockInput.disabled = false;
+    stockInput.style.opacity = '1';
+    stockInput.title = '';
+    if (stockAviso) stockAviso.style.display = 'none';
+  }
+
   resetImg(); document.getElementById('overlay-prod').style.display='flex';
 }
 
@@ -411,7 +490,7 @@ function renderTallas(tallas){
           </td>
           <td style="padding:11px 14px;text-align:center">
             <input type="number" min="0" value="${t.stock}" style="width:70px;text-align:center;padding:5px 8px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;color:var(--white);font-size:.85rem"
-              onchange="actualizarStock('${t.talla}',this.value)">
+              onchange="actualizarStock(${t.id},this.value)">
           </td>
           <td style="padding:11px 14px">
             ${t.stock==0?'<span class="badge badge-danger">Agotada</span>':t.stock<=3?'<span class="badge badge-warning">Poco stock</span>':'<span class="badge badge-success">Disponible</span>'}
@@ -440,10 +519,11 @@ async function guardarTalla(){
   else{errEl.textContent=d.error||'Error';errEl.style.display='block';}
 }
 
-async function actualizarStock(talla,nuevoStock){
+async function actualizarStock(id, nuevoStock){
   const prodId=document.getElementById('talla-prod-id').value;
   const fd=new FormData();
-  fd.append('action','guardar');fd.append('producto_id',prodId);fd.append('talla',talla);fd.append('stock',parseInt(nuevoStock)||0);
+  // Usa acción 'actualizar' → REEMPLAZA el stock (no suma)
+  fd.append('action','actualizar');fd.append('id',id);fd.append('producto_id',prodId);fd.append('stock',parseInt(nuevoStock)||0);
   const r=await fetch(CTRL_TALLA,{method:'POST',body:fd});
   const d=await r.json();
   if(d.success)renderTallas(d.tallas);

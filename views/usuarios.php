@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rol    = $_POST['rol']         ?? 'vendedor';
         if (empty($nombre)||empty($email)||empty($pass)) { $error='Todos los campos son obligatorios'; }
         elseif (strlen($pass)<6) { $error='La contraseña debe tener mínimo 6 caracteres'; }
-        elseif (!in_array($rol,['administrador','vendedor'])) { $error='Rol inválido'; }
+        elseif (!in_array($rol,['administrador','gestor_inventario','vendedor'])) { $error='Rol inválido'; }
         else {
             $r = $um->create($nombre,$email,$pass,$rol);
             if (isset($r['success'])) $msg='Usuario creado correctamente';

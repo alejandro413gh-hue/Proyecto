@@ -6,16 +6,30 @@ class TallaController {
     private $m;
     public function __construct() { requireLogin(); $this->m = new Talla(); }
 
+    /** Agregar stock a una talla (SUMA al existente) — botón "Agregar" */
     public function guardar() {
-        requireGestorOAdmin(); // admin y gestor_inventario
+        requireGestorOAdmin();
         $prod  = intval($_POST['producto_id'] ?? 0);
         $talla = trim($_POST['talla'] ?? '');
         $stock = intval($_POST['stock'] ?? 0);
         if (!$prod || empty($talla)) return ['error' => 'Datos incompletos'];
-        if ($stock < 0) return ['error' => 'El stock no puede ser negativo'];
+        if ($stock <= 0) return ['error' => 'La cantidad debe ser mayor a 0'];
         if ($this->m->guardar($prod, $talla, $stock))
             return ['success' => 'Talla guardada', 'tallas' => $this->m->getPorProducto($prod)];
         return ['error' => 'Error al guardar'];
+    }
+
+    /** Editar stock de una talla existente (REEMPLAZA el valor) — cuadro de edición inline */
+    public function actualizar() {
+        requireGestorOAdmin();
+        $id    = intval($_POST['id'] ?? 0);
+        $prod  = intval($_POST['producto_id'] ?? 0);
+        $stock = intval($_POST['stock'] ?? 0);
+        if (!$id || !$prod) return ['error' => 'Datos incompletos'];
+        if ($stock < 0) return ['error' => 'El stock no puede ser negativo'];
+        if ($this->m->actualizarStock($id, $prod, $stock))
+            return ['success' => 'Stock actualizado', 'tallas' => $this->m->getPorProducto($prod)];
+        return ['error' => 'Error al actualizar'];
     }
 
     public function eliminar() {
@@ -42,8 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
     $c = new TallaController();
     switch ($_POST['action']) {
-        case 'guardar':  echo json_encode($c->guardar());  break;
-        case 'eliminar': echo json_encode($c->eliminar()); break;
+        case 'guardar':    echo json_encode($c->guardar());    break;
+        case 'actualizar': echo json_encode($c->actualizar()); break;
+        case 'eliminar':   echo json_encode($c->eliminar());   break;
         default: echo json_encode(['error' => 'Acción inválida']);
     }
     exit();

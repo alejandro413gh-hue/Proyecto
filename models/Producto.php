@@ -6,30 +6,35 @@ class Producto {
     public function __construct() { $this->db = Database::getInstance(); }
 
     public function getAll($search = '') {
+        // El stock mostrado siempre es la suma real de tallas (si las tiene),
+        // o el stock general si no tiene tallas configuradas.
+        $base = "SELECT p.*, c.nombre as categoria_nombre,
+                    COALESCE(
+                        (SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id),
+                        p.stock
+                    ) as stock
+                 FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id
+                 WHERE p.activo = 1";
         if (!empty($search)) {
             $like = '%' . $search . '%';
-            $s = $this->db->prepare(
-                "SELECT p.*, c.nombre as categoria_nombre 
-                 FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id 
-                 WHERE p.activo = 1 AND (p.nombre LIKE ? OR c.nombre LIKE ?)
-                 ORDER BY p.nombre"
-            );
+            $s = $this->db->prepare($base . " AND (p.nombre LIKE ? OR c.nombre LIKE ?) ORDER BY p.id");
             $s->bind_param("ss", $like, $like);
             $s->execute();
             $r = $s->get_result();
         } else {
-            $r = $this->db->query(
-                "SELECT p.*, c.nombre as categoria_nombre 
-                 FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id 
-                 WHERE p.activo = 1 ORDER BY p.nombre"
-            );
+            $r = $this->db->query($base . " ORDER BY p.id");
         }
         $a = []; while ($row = $r->fetch_assoc()) $a[] = $row; return $a;
     }
 
     public function getById($id) {
         $s = $this->db->prepare(
-            "SELECT p.*, c.nombre as categoria_nombre 
+            "SELECT p.*,
+                    c.nombre as categoria_nombre,
+                    COALESCE(
+                        (SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id),
+                        p.stock
+                    ) as stock
              FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id 
              WHERE p.id = ?"
         );
@@ -77,9 +82,15 @@ class Producto {
 
     public function getLowStock($t = 5) {
         $s = $this->db->prepare(
-            "SELECT p.*, c.nombre as categoria_nombre 
+            "SELECT p.*, c.nombre as categoria_nombre,
+                    COALESCE(
+                        (SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id),
+                        p.stock
+                    ) as stock
              FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id 
-             WHERE p.activo=1 AND p.stock<=? ORDER BY p.stock"
+             WHERE p.activo = 1
+             HAVING stock <= ?
+             ORDER BY stock"
         );
         $s->bind_param("i", $t); $s->execute();
         $r = $s->get_result(); $a = [];
@@ -91,7 +102,16 @@ class Producto {
     }
 
     public function countLowStock() {
-        return $this->db->query("SELECT COUNT(*) as t FROM productos WHERE activo=1 AND stock<=5")->fetch_assoc()['t'];
+        // Contar productos cuyo stock real (suma de tallas o stock general) sea <= 5
+        return (int)$this->db->query(
+            "SELECT COUNT(*) as t FROM (
+                SELECT COALESCE(
+                    (SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id),
+                    p.stock
+                ) as stock_real
+                FROM productos p WHERE p.activo = 1
+             ) AS sub WHERE stock_real <= 5"
+        )->fetch_assoc()['t'];
     }
 
     /** Devuelve la URL de la imagen o null */

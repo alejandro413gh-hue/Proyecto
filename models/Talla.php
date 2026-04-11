@@ -60,18 +60,63 @@ class Talla {
     public function guardar($producto_id, $talla, $stock) {
         $talla = strtoupper(trim($talla));
         if (empty($talla)) return false;
+
+        // Si la talla ya existe → SUMA el stock nuevo al existente
+        // Si la talla no existe → la crea con el stock indicado
         $s = $this->db->prepare(
             "INSERT INTO producto_tallas (producto_id, talla, stock) VALUES (?,?,?)
-             ON DUPLICATE KEY UPDATE stock = ?"
+             ON DUPLICATE KEY UPDATE stock = stock + VALUES(stock)"
         );
-        $s->bind_param("isii", $producto_id, $talla, $stock, $stock);
-        return $s->execute();
+        $s->bind_param("isi", $producto_id, $talla, $stock);
+        if (!$s->execute()) return false;
+
+        // Sincronizar el stock general del producto con la suma de todas sus tallas
+        $this->sincronizarStockGeneral($producto_id);
+        return true;
     }
 
     /** Eliminar una talla */
     public function eliminar($id) {
-        $s = $this->db->prepare("DELETE FROM producto_tallas WHERE id = ?");
+        // Obtener el producto_id antes de eliminar para poder recalcular
+        $s = $this->db->prepare("SELECT producto_id FROM producto_tallas WHERE id = ?");
         $s->bind_param("i", $id);
+        $s->execute();
+        $row = $s->get_result()->fetch_assoc();
+        $producto_id = $row ? $row['producto_id'] : null;
+
+        $s2 = $this->db->prepare("DELETE FROM producto_tallas WHERE id = ?");
+        $s2->bind_param("i", $id);
+        if (!$s2->execute()) return false;
+
+        // ✅ Sincronizar el stock general después de eliminar la talla
+        if ($producto_id) $this->sincronizarStockGeneral($producto_id);
+        return true;
+    }
+
+    /**
+     * Reemplaza el stock de una talla existente (para edición inline).
+     * A diferencia de guardar(), este NO suma — reemplaza el valor directamente.
+     */
+    public function actualizarStock($id, $producto_id, $stock) {
+        $s = $this->db->prepare(
+            "UPDATE producto_tallas SET stock = ? WHERE id = ? AND producto_id = ?"
+        );
+        $s->bind_param("iii", $stock, $id, $producto_id);
+        if (!$s->execute()) return false;
+        $this->sincronizarStockGeneral($producto_id);
+        return true;
+    }
+    public function sincronizarStockGeneral($producto_id) {
+        $s = $this->db->prepare(
+            "UPDATE productos 
+             SET stock = (
+                 SELECT COALESCE(SUM(stock), 0) 
+                 FROM producto_tallas 
+                 WHERE producto_id = ?
+             )
+             WHERE id = ?"
+        );
+        $s->bind_param("ii", $producto_id, $producto_id);
         return $s->execute();
     }
 
