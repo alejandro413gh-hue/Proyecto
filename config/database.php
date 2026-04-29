@@ -1,16 +1,17 @@
 <?php
-if (!defined('DB_HOST'))    define('DB_HOST',    'localhost');
-if (!defined('DB_USER'))    define('DB_USER',    'root');
-if (!defined('DB_PASS'))    define('DB_PASS',    '');
-if (!defined('DB_NAME'))    define('DB_NAME',    'vision_real');
+if (!defined('DB_HOST'))    define('DB_HOST',    'sql209.infinityfree.com');
+if (!defined('DB_USER'))    define('DB_USER',    'iff0_41735490');
+if (!defined('DB_PASS'))    define('DB_PASS',    '1091972715gh');
+if (!defined('DB_NAME'))    define('DB_NAME',    'iff0_41735490_vision_real');
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
+if (!defined('DB_PORT'))    define('DB_PORT',    3306);
 
 class Database {
     private static $instance = null;
     private $connection;
 
     private function __construct() {
-        $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+        $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
         if ($this->connection->connect_error) {
             // Registrar el error real en el log del servidor (no mostrarlo al usuario)
             error_log('DB Connection Error: ' . $this->connection->connect_error);
