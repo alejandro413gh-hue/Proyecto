@@ -45,14 +45,6 @@ $cur  = basename($_SERVER['PHP_SELF']);
       Inventario
     </a>
 
-    <!-- Agregar Inventario: gestores y admin -->
-    <?php if(puedeGestionarInventario()): ?>
-    <a href="<?=BASE_URL?>/views/agregar_inventario.php" class="nav-item <?=$cur==='agregar_inventario.php'?'active':''?>">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
-      Agregar Inventario
-    </a>
-    <?php endif; ?>
-
     <?php if(isAdmin()): ?>
     <!-- Promociones: solo admin -->
     <a href="<?=BASE_URL?>/views/promociones.php" class="nav-item <?=$cur==='promociones.php'?'active':''?>">
