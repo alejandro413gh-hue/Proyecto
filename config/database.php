@@ -11,7 +11,12 @@ class Database {
     private $connection;
 
     private function __construct() {
+        // ✅ CORREGIDO: Agregar timeout para InfinityFree
         $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        
+        // Configurar timeout
+        $this->connection->options(MYSQLI_OPT_CONNECT_TIMEOUT, 28);
+        
         if ($this->connection->connect_error) {
             // Registrar el error real en el log del servidor (no mostrarlo al usuario)
             error_log('DB Connection Error: ' . $this->connection->connect_error);
@@ -24,15 +29,34 @@ class Database {
     }
 
     public static function getInstance() {
-        if (self::$instance === null) self::$instance = new Database();
+        if (self::$instance === null) {
+            self::$instance = new Database();
+        }
         return self::$instance;
     }
 
-    public function getConnection() { return $this->connection; }
-    public function query($sql)     { return $this->connection->query($sql); }
-    public function prepare($sql)   { return $this->connection->prepare($sql); }
-    public function escape($v)      { return $this->connection->real_escape_string($v); }
-    public function lastInsertId()  { return $this->connection->insert_id; }
-    public function affectedRows()  { return $this->connection->affected_rows; }
+    public function getConnection() { 
+        return $this->connection; 
+    }
+    
+    public function query($sql)     { 
+        return $this->connection->query($sql); 
+    }
+    
+    public function prepare($sql)   { 
+        return $this->connection->prepare($sql); 
+    }
+    
+    public function escape($v)      { 
+        return $this->connection->real_escape_string($v); 
+    }
+    
+    public function lastInsertId()  { 
+        return $this->connection->insert_id; 
+    }
+    
+    public function affectedRows()  { 
+        return $this->connection->affected_rows; 
+    }
 }
 ?>
