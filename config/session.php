@@ -1,19 +1,34 @@
 <?php
+// ✅ CORREGIDO: Buffering y configuración segura de sesión
 if (session_status() === PHP_SESSION_NONE) {
     // Configuración segura de sesión
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_strict_mode', 1);
-    ini_set('session.cookie_samesite', 'Strict');
+    // ✅ CORREGIDO: Cambiar de 'Strict' a 'Lax' para mejor compatibilidad
+    ini_set('session.cookie_samesite', 'Lax');
     session_start();
 }
 
-function isLoggedIn()  { return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']); }
+function isLoggedIn()  { 
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']); 
+}
 
 // ---- ROLES ----
-function getRol()      { return $_SESSION['user_rol'] ?? ''; }
-function isAdmin()     { return getRol() === 'administrador'; }
-function isGestor()    { return getRol() === 'gestor_inventario'; }
-function isVendedor()  { return getRol() === 'vendedor'; }
+function getRol()      { 
+    return $_SESSION['user_rol'] ?? ''; 
+}
+
+function isAdmin()     { 
+    return getRol() === 'administrador'; 
+}
+
+function isGestor()    { 
+    return getRol() === 'gestor_inventario'; 
+}
+
+function isVendedor()  { 
+    return getRol() === 'vendedor'; 
+}
 
 // Puede gestionar inventario (admin o gestor)
 function puedeGestionarInventario() {
@@ -22,17 +37,26 @@ function puedeGestionarInventario() {
 
 // ---- PROTECCIÓN DE RUTAS ----
 function requireLogin() {
-    if (!isLoggedIn()) { header('Location:'.BASE_URL.'/index.php'); exit(); }
+    if (!isLoggedIn()) { 
+        header('Location: ' . BASE_URL . '/index.php'); 
+        exit(); 
+    }
 }
 
 function requireAdmin() {
     requireLogin();
-    if (!isAdmin()) { header('Location:'.BASE_URL.'/views/dashboard.php'); exit(); }
+    if (!isAdmin()) { 
+        header('Location: ' . BASE_URL . '/views/dashboard.php'); 
+        exit(); 
+    }
 }
 
 function requireGestorOAdmin() {
     requireLogin();
-    if (!puedeGestionarInventario()) { header('Location:'.BASE_URL.'/views/dashboard.php'); exit(); }
+    if (!puedeGestionarInventario()) { 
+        header('Location: ' . BASE_URL . '/views/dashboard.php'); 
+        exit(); 
+    }
 }
 
 function getCurrentUser() {
