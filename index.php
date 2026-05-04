@@ -1,18 +1,36 @@
 <?php
+// ✅ CORREGIDO: Buffering previo a cualquier salida
+ob_start();
+
 require_once __DIR__ . '/config/config.php';
-if(isLoggedIn()){ header('Location:'.BASE_URL.'/views/dashboard.php'); exit(); }
-$error=''; $info='';
-if($_SERVER['REQUEST_METHOD']==='POST'){
+
+if(isLoggedIn()) { 
+    header('Location: ' . BASE_URL . '/views/dashboard.php'); 
+    exit();
+}
+
+$error = '';
+$info  = '';
+
+if($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once __DIR__ . '/controllers/AuthController.php';
-    $ctrl=new AuthController();
-    $r=$ctrl->login();
-    if(isset($r['success'])){ header('Location:'.BASE_URL.'/views/dashboard.php'); exit(); }
-    else $error=$r['error']??'Error desconocido';
+    $ctrl = new AuthController();
+    $r = $ctrl->login();
+    
+    if(isset($r['success']) && $r['success']) {
+        // Sesión iniciada correctamente
+        header('Location: ' . BASE_URL . '/views/dashboard.php'); 
+        exit();
+    } else {
+        // Error en login
+        $error = $r['error'] ?? 'Error desconocido';
+    }
 }
 ?><!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Acceso — Visión Real</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="<?=BASE_URL?>/assets/css/style.css">
@@ -27,9 +45,14 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
       <span class="sub">Sistema Comercial</span>
       <div class="divider-gold"></div>
     </div>
-    <?php if($error): ?><div class="alert alert-error" style="margin-bottom:16px">⚠ <?=htmlspecialchars($error)?></div><?php endif; ?>
     
-    <form method="POST">
+    <?php if($error): ?>
+    <div class="alert alert-error" style="margin-bottom:16px">
+      ⚠ <?=htmlspecialchars($error)?>
+    </div>
+    <?php endif; ?>
+    
+    <form method="POST" action="">
       <div class="form-group">
         <label>Correo Electrónico</label>
         <input type="email" name="email" placeholder="usuario@visionreal.com" required autofocus>
@@ -38,11 +61,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         <label>Contraseña</label>
         <input type="password" name="password" placeholder="••••••••" required>
       </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;font-weight:700;font-size:.95rem">Iniciar Sesión</button>
+      <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;font-weight:700;font-size:.95rem">
+        Iniciar Sesión
+      </button>
     </form>
 
-    <!-- AVISO DE RECUPERACIÓN -->
-    <div style="margin-top:16px;padding:12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;font-size:.78rem;color:var(--white-dim);line-height:1.6;text-align:center">
+    <div style="margin-top:16px;padding:12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:8px;font-size:.78rem;color:var(--white-dim);line-height:1.6">
       <span style="display:block;margin-bottom:6px">🔐 <strong style="color:var(--gold)">Seguridad</strong></span>
       <span style="color:var(--white-muted)">Si olvidó su contraseña, comuníquese con el <strong style="color:var(--white)">Administrador del sistema</strong>.</span>
     </div>
@@ -56,3 +80,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 </div>
 </body>
 </html>
+<?php
+// Limpiar buffer antes de salida final
+ob_end_flush();
+?>
