@@ -1,11 +1,15 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../models/Carrito.php';
+require_once __DIR__ . '/includes/session_tienda.php';
+require_once __DIR__ . '/../models/Producto.php';
+require_once __DIR__ . '/../models/tienda/Carrito.php';
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+requireTiendaLogin();
+$cliente = getTiendaCliente();
 $carrito = new Carrito();
-$items = $carrito->getItems(session_id());
-$total = $carrito->getTotal(session_id());
+$contenido = $carrito->getContenido((int) $cliente['id']);
+$items = $contenido['items'] ?? [];
+$total = (float) ($contenido['subtotal'] ?? 0);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -38,7 +42,7 @@ $total = $carrito->getTotal(session_id());
               <div class="cart-item-title"><?=htmlspecialchars($item['nombre'])?></div>
               <div class="cart-item-meta">Talla: <?=htmlspecialchars($item['talla'] ?: 'Única')?></div>
               <div class="cart-item-meta">Precio: $<?=number_format($item['precio_unitario'],0,',','.')?></div>
-              <div class="cart-item-meta">Sub-total: $<?=number_format($item['subtotal'],0,',','.')?></div>
+              <div class="cart-item-meta">Sub-total: $<?=number_format($item['subtotal_item'],0,',','.')?></div>
               <div class="cart-item-actions">
                 <input type="number" min="1" max="<?=intval($item['stock_disponible'])?>" value="<?=intval($item['cantidad'])?>" data-item-id="<?=$item['id']?>" class="qty-input">
                 <button class="btn btn-secondary btn-small remove-item" data-item-id="<?=$item['id']?>">Eliminar</button>

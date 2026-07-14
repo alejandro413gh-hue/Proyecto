@@ -2,12 +2,8 @@
 // assets/js/app.js - Visión Real
 // ============================================
 
-// BASE_URL must be set inline in each page before this script, OR we infer the app folder.
-const BASE_URL = window.BASE_URL || (() => {
-  const segments = window.location.pathname.split('/').filter(Boolean);
-  const project = segments[0] && !segments[0].includes('.') ? `/${segments[0]}` : '';
-  return window.location.origin + project;
-})();
+// BASE_URL must be set inline in each page before this script, OR we detect it
+const BASE_URL = window.BASE_URL || window.location.origin + '/vision_real';
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -279,7 +275,8 @@ const VentasModule = {
     };
     const res = await apiPost(BASE_URL + '/controllers/VentaController.php', payload);
     if (res.success) {
-      showToast('Venta registrada exitosamente', 'success');
+      const extra = res.factura && res.factura.numero_factura ? ` · ${res.factura.numero_factura}` : '';
+      showToast(`Venta registrada exitosamente${extra}`, 'success');
       this.cart = [];
       this.renderCart();
       closeModal('modal-venta');

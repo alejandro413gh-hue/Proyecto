@@ -133,13 +133,77 @@ class Talla {
 
     /** Verificar stock disponible de una talla */
     public function getStock($producto_id, $talla) {
-        $s = $this->db->prepare(
-            "SELECT stock FROM producto_tallas WHERE producto_id = ? AND talla = ?"
-        );
-        $s->bind_param("is", $producto_id, $talla);
+        return $this->getStockDisponible((int) $producto_id, (string) $talla);
+    }
+
+    /**
+     * Stock disponible real para una talla.
+     * Si no se envía talla, usa el stock general del producto.
+     */
+    public function getStockDisponible(int $producto_id, string $talla): int {
+        $talla = trim($talla);
+        if ($talla === '') {
+            $s = $this->db->prepare("SELECT stock FROM productos WHERE id = ?");
+            $s->bind_param("i", $producto_id);
+        } else {
+            $s = $this->db->prepare(
+                "SELECT stock FROM producto_tallas WHERE producto_id = ? AND talla = ?"
+            );
+            $s->bind_param("is", $producto_id, $talla);
+        }
         $s->execute();
         $r = $s->get_result()->fetch_assoc();
-        return $r ? (int)$r['stock'] : 0;
+        return $r ? (int) $r['stock'] : 0;
+    }
+
+    /**
+     * Valida que una cantidad no supere el stock disponible de una talla.
+     */
+    public function validarCantidadDisponible(int $producto_id, string $talla, int $cantidad): array {
+        $cantidad = max(0, $cantidad);
+        $stock = $this->getStockDisponible($producto_id, $talla);
+        if ($cantidad > $stock) {
+            $label = trim($talla) !== '' ? "La talla {$talla}" : 'El producto';
+            return [
+                'success' => false,
+                'stock' => $stock,
+                'error' => "{$label} únicamente tiene {$stock} unidades disponibles.",
+            ];
+        }
+        return [
+            'success' => true,
+            'stock' => $stock,
+        ];
+    }
+
+    /**
+     * Valida un lote de items antes de confirmar una venta.
+     */
+    public function validarItems(array $items): array {
+        foreach ($items as $item) {
+            $productoId = (int) ($item['producto_id'] ?? 0);
+            $talla = trim((string) ($item['talla'] ?? ''));
+            $cantidad = (int) ($item['cantidad'] ?? 0);
+            if ($productoId <= 0 || $cantidad <= 0) {
+                return [
+                    'success' => false,
+                    'error' => 'Datos de inventario inválidos.',
+                ];
+            }
+
+            $check = $this->validarCantidadDisponible($productoId, $talla, $cantidad);
+            if (!($check['success'] ?? false)) {
+                return [
+                    'success' => false,
+                    'error' => $check['error'] ?? 'No hay suficiente inventario.',
+                    'stock' => $check['stock'] ?? 0,
+                    'producto_id' => $productoId,
+                    'talla' => $talla,
+                    'cantidad' => $cantidad,
+                ];
+            }
+        }
+        return ['success' => true];
     }
 
     /** Stock total de todas las tallas de un producto */

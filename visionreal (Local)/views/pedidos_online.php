@@ -32,7 +32,8 @@ $pedidoM = new Pedido();
 $ptM     = new ProductoTienda();
 
 $filtroEstado = $_GET['estado'] ?? '';
-$pedidos      = $pedidoM->getAllAdmin($filtroEstado, 100);
+$pedidos      = $pedidoM->getAllAdmin($filtroEstado, 0);
+$totalPedidos = $pedidoM->countAllAdmin($filtroEstado);
 $statsPorEstado = $pedidoM->countPorEstado();
 $statsVentas  = $ptM->statsVentasPorTipo();
 $totalHoy     = $pedidoM->getTotalOnlineHoy();
@@ -119,7 +120,7 @@ include __DIR__ . '/partials/head.php';
       <div class="card-header">
         <span class="card-title">
           <?= $filtroEstado ? ucfirst($filtroEstado) : 'Todos los pedidos' ?>
-          (<?= count($pedidos) ?>)
+          (<?= number_format($totalPedidos, 0, ',', '.') ?>)
         </span>
         <button onclick="location.reload()" class="btn btn-outline btn-sm">
           ↺ Actualizar
@@ -178,8 +179,15 @@ include __DIR__ . '/partials/head.php';
                 <?php endif; ?>
               </td>
               <td>
-                <span class="badge badge-<?= $p['estado'] === 'completada' ? 'success' : ($p['estado'] === 'cancelado' ? 'danger' : 'warning') ?>"
-                      style="text-transform:capitalize">
+                <?php
+                  $badgeClass = 'warning';
+                  if (in_array($p['estado'], ['entregado'], true)) {
+                      $badgeClass = 'success';
+                  } elseif ($p['estado'] === 'cancelado') {
+                      $badgeClass = 'danger';
+                  }
+                ?>
+                <span class="badge badge-<?= $badgeClass ?>" style="text-transform:capitalize">
                   <?= htmlspecialchars($p['estado']) ?>
                 </span>
               </td>
@@ -191,10 +199,12 @@ include __DIR__ . '/partials/head.php';
                 <div style="display:flex;flex-direction:column;gap:4px">
 
                   <?php if ($p['estado'] === 'pendiente' && (isAdmin() || isVendedor())): ?>
+                    <?php if (!in_array($p['tipo_entrega'], ['recoge_tienda','recoger_tienda'], true)): ?>
                   <button onclick="confirmarPago(<?= $p['id'] ?>)"
                           class="btn btn-sm" style="background:var(--gold);color:var(--black);font-size:.72rem;padding:4px 8px">
                     ✓ Confirmar pago
                   </button>
+                    <?php endif; ?>
                   <?php endif; ?>
 
                   <?php if ($p['estado'] === 'pagado' && (isAdmin() || isGestor())): ?>
@@ -204,7 +214,12 @@ include __DIR__ . '/partials/head.php';
                   </button>
                   <?php endif; ?>
 
-                  <?php if ($p['estado'] === 'preparando' && (isAdmin() || isGestor())): ?>
+                  <?php if (in_array($p['tipo_entrega'], ['recoge_tienda','recoger_tienda'], true) && $p['estado'] === 'preparando' && (isAdmin() || isGestor())): ?>
+                  <button onclick="cambiarEstadoPedido(<?= $p['id'] ?>, 'entregado')"
+                          class="btn btn-outline btn-sm" style="font-size:.72rem;padding:4px 8px">
+                    ✅ Marcar como entregado
+                  </button>
+                  <?php elseif ($p['estado'] === 'preparando' && (isAdmin() || isGestor())): ?>
                   <button onclick="cambiarEstadoPedido(<?= $p['id'] ?>, 'enviado')"
                           class="btn btn-outline btn-sm" style="font-size:.72rem;padding:4px 8px">
                     🚚 Marcar enviado

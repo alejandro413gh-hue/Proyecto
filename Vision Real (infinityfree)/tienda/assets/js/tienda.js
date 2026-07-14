@@ -22,7 +22,7 @@ function fmtPrecio(v) {
 async function apiPost(url, data) {
   const fd = new FormData();
   for (const [k, v] of Object.entries(data)) fd.append(k, v);
-  const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' });
+  const r = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', cache: 'no-store' });
   const text = await r.text();
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
   try {
@@ -33,7 +33,7 @@ async function apiPost(url, data) {
 }
 
 async function apiGet(url) {
-  const r = await fetch(url, { credentials: 'same-origin' });
+  const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
   const text = await r.text();
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
   try {

@@ -5,12 +5,15 @@
  * Valida stock real contra producto_tallas (misma tabla que ventas físicas).
  */
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/Talla.php';
 
 class Carrito {
     private $db;
+    private Talla $inventario;
 
     public function __construct() {
         $this->db = Database::getInstance();
+        $this->inventario = new Talla();
     }
 
     /* ─── Obtener o crear carrito del cliente ────────────────── */
@@ -39,8 +42,10 @@ class Carrito {
 
         // Verificar stock de la talla
         $stockDisponible = $this->getStockTalla($productoId, $talla);
-        if ($stockDisponible < $cantidad)
-            return ['error' => "Stock insuficiente. Disponible: {$stockDisponible} unidades."];
+        if ($stockDisponible < $cantidad) {
+            $label = trim($talla) !== '' ? "La talla {$talla}" : 'El producto';
+            return ['error' => "{$label} únicamente tiene {$stockDisponible} unidades disponibles."];
+        }
 
         $precio    = (float)$prod['precio'];
         $carritoId = $this->obtenerOCrear($clienteOnlineId);
@@ -72,9 +77,10 @@ class Carrito {
         $item = $this->getItem($itemId, $clienteOnlineId);
         if (!$item) return ['error' => 'Item no encontrado.'];
 
-        $stock = $this->getStockTalla($item['producto_id'], $item['talla']);
-        if ($cantidad > $stock)
-            return ['error' => "Stock insuficiente. Disponible: {$stock}."];
+        $check = $this->inventario->validarCantidadDisponible((int) $item['producto_id'], (string) ($item['talla'] ?? ''), $cantidad);
+        if (!($check['success'] ?? false)) {
+            return ['error' => $check['error'] ?? 'No hay suficiente inventario.'];
+        }
 
         $s = $this->db->prepare(
             "UPDATE carrito_items ci
@@ -120,7 +126,10 @@ class Carrito {
             "SELECT ci.id, ci.producto_id, ci.talla, ci.cantidad, ci.precio_unitario,
                     (ci.cantidad * ci.precio_unitario) as subtotal_item,
                     p.nombre, p.imagen, p.activo, p.visible_tienda,
-                    COALESCE(pt.stock, 0) as stock_disponible
+                    CASE
+                        WHEN ci.talla IS NULL OR ci.talla = '' THEN COALESCE(p.stock, 0)
+                        ELSE COALESCE(pt.stock, 0)
+                    END as stock_disponible
              FROM carrito_items ci
              JOIN productos p ON ci.producto_id = p.id
              LEFT JOIN producto_tallas pt
@@ -176,19 +185,11 @@ class Carrito {
     }
 
     private function getStockTalla(int $productoId, string $talla): int {
-        if (empty($talla)) {
-            // Sin talla → usar stock general
-            $s = $this->db->prepare("SELECT stock FROM productos WHERE id=?");
-            $s->bind_param("i", $productoId);
-        } else {
-            $s = $this->db->prepare(
-                "SELECT stock FROM producto_tallas WHERE producto_id=? AND talla=?"
-            );
-            $s->bind_param("is", $productoId, $talla);
-        }
-        $s->execute();
-        $r = $s->get_result()->fetch_assoc();
-        return $r ? (int)$r['stock'] : 0;
+        return $this->inventario->getStockDisponible($productoId, $talla);
+    }
+
+    public function validarItems(array $items): array {
+        return $this->inventario->validarItems($items);
     }
 
     private function getProductoTienda(int $id): ?array {

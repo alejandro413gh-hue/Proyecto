@@ -20,9 +20,6 @@ if (!isset($_SESSION['cliente_online_id']) && isset($_COOKIE['vr_tienda_token'])
     $cli = $cm->verificarSesion($_COOKIE['vr_tienda_token']);
     if ($cli) {
         $_SESSION['cliente_online_id']     = $cli['id'];
-        $_SESSION['cliente_online_nombre'] = $cli['nombre'];
-        $_SESSION['cliente_online_email']  = $cli['email'];
-        $_SESSION['cliente_online_sexo']   = $cli['sexo'];
     } else {
         // Token expirado → limpiar cookie
         setcookie('vr_tienda_token', '', time() - 3600, '/', '', false, true);
@@ -36,11 +33,33 @@ function tiendaLoggedIn(): bool {
 }
 
 function getTiendaCliente(): array {
+    if (!tiendaLoggedIn()) {
+        return [
+            'id' => null,
+            'nombre' => '',
+            'email' => '',
+            'sexo' => 'O',
+        ];
+    }
+
+    require_once __DIR__ . '/../../models/tienda/ClienteOnline.php';
+    $cm = new ClienteOnline();
+    $cliente = $cm->getById((int) $_SESSION['cliente_online_id']);
+    if (!$cliente) {
+        unset($_SESSION['cliente_online_id']);
+        return [
+            'id' => null,
+            'nombre' => '',
+            'email' => '',
+            'sexo' => 'O',
+        ];
+    }
+
     return [
-        'id'     => $_SESSION['cliente_online_id']     ?? null,
-        'nombre' => $_SESSION['cliente_online_nombre'] ?? '',
-        'email'  => $_SESSION['cliente_online_email']  ?? '',
-        'sexo'   => $_SESSION['cliente_online_sexo']   ?? 'O',
+        'id' => (int) ($cliente['id'] ?? 0),
+        'nombre' => (string) ($cliente['nombre'] ?? ''),
+        'email' => (string) ($cliente['email'] ?? ''),
+        'sexo' => (string) ($cliente['sexo'] ?? 'O'),
     ];
 }
 
@@ -55,20 +74,12 @@ function requireTiendaLogin(string $redirect = '/tienda/login.php'): void {
 function tiendaLogin(array $cliente, string $token): void {
     session_regenerate_id(true);
     $_SESSION['cliente_online_id']     = $cliente['id'];
-    $_SESSION['cliente_online_nombre'] = $cliente['nombre'];
-    $_SESSION['cliente_online_email']  = $cliente['email'];
-    $_SESSION['cliente_online_sexo']   = $cliente['sexo'];
     // Cookie de sesión persistente 30 días
     setcookie('vr_tienda_token', $token, time() + 60 * 60 * 24 * 30, '/', '', false, true);
 }
 
 function tiendaLogout(): void {
-    unset(
-        $_SESSION['cliente_online_id'],
-        $_SESSION['cliente_online_nombre'],
-        $_SESSION['cliente_online_email'],
-        $_SESSION['cliente_online_sexo']
-    );
+    unset($_SESSION['cliente_online_id']);
     setcookie('vr_tienda_token', '', time() - 3600, '/', '', false, true);
     header('Location: ' . BASE_URL . '/tienda/index.php');
     exit();
@@ -76,19 +87,15 @@ function tiendaLogout(): void {
 
 /**
  * Devuelve la cantidad de items en el carrito del cliente actual.
- * Usa sesión cacheada para no hacer query en cada petición.
+ * Se consulta siempre en MySQL para evitar desincronización.
  */
 function getCarritoCount(): int {
     if (!tiendaLoggedIn()) return 0;
-    if (isset($_SESSION['carrito_count'])) return (int)$_SESSION['carrito_count'];
-
     require_once __DIR__ . '/../../models/tienda/Carrito.php';
     $cm = new Carrito();
-    $count = $cm->contarItems((int)$_SESSION['cliente_online_id']);
-    $_SESSION['carrito_count'] = $count;
-    return $count;
+    return (int) $cm->contarItems((int) $_SESSION['cliente_online_id']);
 }
 
 function invalidarCacheCarrito(): void {
-    unset($_SESSION['carrito_count']);
+    // Sin caché local: se deja por compatibilidad con llamadas existentes.
 }

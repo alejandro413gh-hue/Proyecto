@@ -7,6 +7,46 @@ class Producto {
     public function __construct() {
         $this->db = Database::getInstance();
         $this->agregarColumnaCodigo();
+        $this->ensurePosSchema();
+    }
+
+    private function ensurePosSchema(): void {
+        $conn = $this->db->getConnection();
+
+        $columns = [
+            'codigo_barras' => "ALTER TABLE productos ADD COLUMN codigo_barras VARCHAR(50) NULL AFTER codigo",
+            'referencia' => "ALTER TABLE productos ADD COLUMN referencia VARCHAR(80) NULL AFTER codigo_barras",
+            'costo' => "ALTER TABLE productos ADD COLUMN costo DECIMAL(10,2) NULL DEFAULT NULL AFTER precio",
+        ];
+
+        foreach ($columns as $column => $sql) {
+            $check = $conn->query("SHOW COLUMNS FROM productos LIKE '" . $conn->real_escape_string($column) . "'");
+            if ($check && $check->num_rows === 0) {
+                @$conn->query($sql);
+            }
+        }
+
+        $indexes = [
+            'idx_productos_categoria_id' => 'ALTER TABLE productos ADD INDEX idx_productos_categoria_id (categoria_id)',
+            'idx_productos_nombre' => 'ALTER TABLE productos ADD INDEX idx_productos_nombre (nombre(100))',
+            'idx_productos_codigo_barras' => 'ALTER TABLE productos ADD INDEX idx_productos_codigo_barras (codigo_barras)',
+            'idx_productos_referencia' => 'ALTER TABLE productos ADD INDEX idx_productos_referencia (referencia)',
+        ];
+
+        foreach ($indexes as $indexName => $sql) {
+            $check = $conn->query("SHOW INDEX FROM productos WHERE Key_name = '" . $conn->real_escape_string($indexName) . "'");
+            if ($check && $check->num_rows === 0) {
+                @$conn->query($sql);
+            }
+        }
+
+        @$conn->query(
+            "CREATE TABLE IF NOT EXISTS producto_favoritos (
+                producto_id INT NOT NULL PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
     }
 
     private function agregarColumnaCodigo() {
@@ -25,6 +65,19 @@ class Producto {
         $micro = substr(str_replace('.', '', (string) microtime(true)), -8);
         $codigo = $prefijo . str_pad((string) $id, 4, '0', STR_PAD_LEFT) . $micro;
         return substr($codigo, 0, 20);
+    }
+
+    private function bindParams(mysqli_stmt $stmt, string $types, array $params): bool {
+        if ($types === '' || empty($params)) {
+            return true;
+        }
+
+        $bind = [$types];
+        foreach ($params as $k => $v) {
+            $bind[$k + 1] = &$params[$k];
+        }
+
+        return call_user_func_array([$stmt, 'bind_param'], $bind);
     }
 
     public function renumerarCodigosActivos(): bool {
@@ -92,9 +145,171 @@ class Producto {
             "SELECT p.*, c.nombre as categoria_nombre,
                     COALESCE((SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id), p.stock) as stock
              FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id
-             WHERE p.codigo = ? AND p.activo = 1"
+             WHERE p.activo = 1 AND (
+                p.codigo = ? OR p.codigo_barras = ? OR p.referencia = ?
+             )"
         );
-        $s->bind_param("s", $codigo);
+        $s->bind_param("sss", $codigo, $codigo, $codigo);
+        $s->execute();
+        return $s->get_result()->fetch_assoc();
+    }
+
+    public function getPosCategories(): array {
+        $r = $this->db->query(
+            "SELECT c.id, c.nombre, COUNT(p.id) as total
+             FROM categorias c
+             LEFT JOIN productos p ON p.categoria_id = c.id AND p.activo = 1 AND p.visible_tienda = 1
+             GROUP BY c.id, c.nombre
+             ORDER BY c.nombre ASC"
+        );
+        $a = [];
+        while ($r && ($row = $r->fetch_assoc())) {
+            $a[] = [
+                'id' => (int) $row['id'],
+                'nombre' => (string) $row['nombre'],
+                'total' => (int) $row['total'],
+            ];
+        }
+        return $a;
+    }
+
+    public function getFavoriteIds(): array {
+        $r = $this->db->query("SELECT producto_id FROM producto_favoritos ORDER BY created_at DESC");
+        $ids = [];
+        while ($r && ($row = $r->fetch_assoc())) {
+            $ids[] = (int) ($row['producto_id'] ?? 0);
+        }
+        return $ids;
+    }
+
+    public function toggleFavorito(int $productoId): bool {
+        $exists = $this->db->prepare("SELECT producto_id FROM producto_favoritos WHERE producto_id = ?");
+        $exists->bind_param("i", $productoId);
+        $exists->execute();
+        $row = $exists->get_result()->fetch_assoc();
+
+        if ($row) {
+            $del = $this->db->prepare("DELETE FROM producto_favoritos WHERE producto_id = ?");
+            $del->bind_param("i", $productoId);
+            return $del->execute();
+        }
+
+        $ins = $this->db->prepare("INSERT INTO producto_favoritos (producto_id) VALUES (?)");
+        $ins->bind_param("i", $productoId);
+        return $ins->execute();
+    }
+
+    public function getPosProducts(array $filters = []): array {
+        $q = trim((string) ($filters['q'] ?? ''));
+        $categoriaId = (int) ($filters['categoria_id'] ?? 0);
+        $order = strtolower(trim((string) ($filters['order'] ?? 'popular')));
+        $limit = max(1, min(300, (int) ($filters['limit'] ?? 120)));
+        $offset = max(0, (int) ($filters['offset'] ?? 0));
+
+        $where = "WHERE p.activo = 1 AND p.visible_tienda = 1";
+        $params = [];
+        $types = '';
+
+        if ($categoriaId > 0) {
+            $where .= " AND p.categoria_id = ?";
+            $params[] = $categoriaId;
+            $types .= 'i';
+        }
+
+        if ($q !== '') {
+            $where .= " AND (p.codigo LIKE ? OR p.codigo_barras LIKE ? OR p.referencia LIKE ? OR p.nombre LIKE ? OR p.descripcion LIKE ?)";
+            $like = '%' . $q . '%';
+            array_push($params, $like, $like, $like, $like, $like);
+            $types .= 'sssss';
+        }
+
+        $orderBy = match ($order) {
+            'recent' => "p.created_at DESC, p.id DESC",
+            'favorites' => "favorito DESC, vendidos DESC, p.created_at DESC",
+            'alpha' => "p.nombre ASC",
+            'stock' => "stock DESC, p.nombre ASC",
+            default => "favorito DESC, vendidos DESC, p.created_at DESC, p.id DESC",
+        };
+
+        $sql = "
+           SELECT p.id, p.codigo, p.codigo_barras, p.referencia, p.nombre, p.descripcion, p.precio, p.costo, p.stock,
+                   p.categoria_id, p.imagen, p.created_at, c.nombre AS categoria_nombre,
+                   COALESCE((SELECT COUNT(*) FROM producto_tallas pt4 WHERE pt4.producto_id = p.id), 0) AS tallas_count,
+                   COALESCE((SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id), p.stock) AS stock_real,
+                   CASE WHEN EXISTS(SELECT 1 FROM producto_tallas pt2 WHERE pt2.producto_id = p.id) THEN 1 ELSE 0 END AS tiene_tallas,
+                   COALESCE((
+                       SELECT pt3.talla
+                       FROM producto_tallas pt3
+                       WHERE pt3.producto_id = p.id AND pt3.stock > 0
+                       ORDER BY pt3.stock DESC, pt3.id ASC
+                       LIMIT 1
+                   ), '') AS talla_defecto,
+                   COALESCE(vt.vendidos, 0) AS vendidos,
+                   CASE WHEN pf.producto_id IS NULL THEN 0 ELSE 1 END AS favorito
+            FROM productos p
+            LEFT JOIN categorias c ON c.id = p.categoria_id
+            LEFT JOIN (
+                SELECT dv.producto_id, SUM(dv.cantidad) AS vendidos
+                FROM detalle_venta dv
+                JOIN ventas v ON v.id = dv.venta_id AND v.estado = 'completada'
+                GROUP BY dv.producto_id
+            ) vt ON vt.producto_id = p.id
+            LEFT JOIN producto_favoritos pf ON pf.producto_id = p.id
+            $where
+            ORDER BY $orderBy
+            LIMIT $limit OFFSET $offset
+        ";
+
+        if (!empty($params)) {
+            $stmt = $this->db->prepare($sql);
+            $this->bindParams($stmt, $types, $params);
+            $stmt->execute();
+            $r = $stmt->get_result();
+        } else {
+            $r = $this->db->query($sql);
+        }
+
+        $rows = [];
+        while ($r && ($row = $r->fetch_assoc())) {
+            $row['id'] = (int) $row['id'];
+            $row['categoria_id'] = (int) ($row['categoria_id'] ?? 0);
+            $row['precio'] = (float) ($row['precio'] ?? 0);
+            $row['costo'] = isset($row['costo']) ? (float) $row['costo'] : null;
+            $row['stock'] = (int) ($row['stock_real'] ?? $row['stock'] ?? 0);
+            $row['vendidos'] = (int) ($row['vendidos'] ?? 0);
+            $row['favorito'] = (bool) ($row['favorito'] ?? false);
+            $row['tiene_tallas'] = (bool) ($row['tiene_tallas'] ?? false);
+            $row['tallas_count'] = (int) ($row['tallas_count'] ?? 0);
+            $row['talla_defecto'] = (string) ($row['talla_defecto'] ?? '');
+            $row['imagen_url'] = self::getImageUrl($row, BASE_URL) ?: (BASE_URL . '/tienda/assets/img/sin-imagen.svg');
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    public function buscarPos(string $term, int $limit = 20): array {
+        return $this->getPosProducts([
+            'q' => $term,
+            'limit' => $limit,
+            'order' => 'popular',
+        ]);
+    }
+
+    public function getBySearchTerm(string $term) {
+        $like = '%' . $term . '%';
+        $s = $this->db->prepare(
+            "SELECT p.*, c.nombre as categoria_nombre,
+                    COALESCE((SELECT SUM(pt.stock) FROM producto_tallas pt WHERE pt.producto_id = p.id), p.stock) as stock
+             FROM productos p LEFT JOIN categorias c ON p.categoria_id = c.id
+             WHERE p.activo = 1 AND (
+                p.codigo = ? OR p.codigo_barras = ? OR p.referencia = ? OR
+                p.nombre LIKE ? OR p.descripcion LIKE ?
+             )
+             ORDER BY p.nombre ASC
+             LIMIT 1"
+        );
+        $s->bind_param("sssss", $term, $term, $term, $like, $like);
         $s->execute();
         return $s->get_result()->fetch_assoc();
     }

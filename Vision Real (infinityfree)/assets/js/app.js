@@ -275,7 +275,8 @@ const VentasModule = {
     };
     const res = await apiPost(BASE_URL + '/controllers/VentaController.php', payload);
     if (res.success) {
-      showToast('Venta registrada exitosamente', 'success');
+      const extra = res.factura && res.factura.numero_factura ? ` · ${res.factura.numero_factura}` : '';
+      showToast(`Venta registrada exitosamente${extra}`, 'success');
       this.cart = [];
       this.renderCart();
       closeModal('modal-venta');

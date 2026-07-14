@@ -8,6 +8,9 @@
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../Descuento.php';
 require_once __DIR__ . '/../Cliente.php';
+require_once __DIR__ . '/../Talla.php';
+require_once __DIR__ . '/../Factura.php';
+require_once __DIR__ . '/../Producto.php';
 require_once __DIR__ . '/ClienteOnline.php';
 
 if (!defined('WHATSAPP_SEND_NOTIFICATIONS')) {
@@ -142,6 +145,12 @@ class Pedido {
         if (empty($carritoContenido['items']))
             return ['error' => 'El carrito está vacío.'];
 
+        $inventario = new Talla();
+        $stockCheck = $inventario->validarItems($carritoContenido['items']);
+        if (!($stockCheck['success'] ?? false)) {
+            return ['error' => $stockCheck['error'] ?? 'No hay suficiente inventario para completar el pedido.'];
+        }
+
         $conn->begin_transaction();
         try {
             // Calcular totales
@@ -164,6 +173,7 @@ class Pedido {
             // Resolver tipo_entrega
             $tipoEntrega = in_array($datosEnvio['tipo_entrega'] ?? '', ['domicilio','recoge_tienda'])
                 ? $datosEnvio['tipo_entrega'] : 'domicilio';
+            $estado = $tipoEntrega === 'recoge_tienda' ? 'preparando' : 'pendiente';
 
             // Buscar cliente_id interno si existe y sincronizar si falta
             $clienteId = $this->resolverClienteInterno($clienteOnlineId);
@@ -185,7 +195,7 @@ class Pedido {
                   envio_nombre,envio_telefono,envio_direccion,envio_ciudad,metodo_pago,printable_token)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
-            $estado  = 'pendiente';
+            $estado  = $tipoEntrega === 'recoge_tienda' ? 'preparando' : 'pendiente';
             $notas   = trim($datosEnvio['notas'] ?? '');
             $nombre  = trim($datosEnvio['nombre']    ?? '');
             $tel     = trim($datosEnvio['telefono']   ?? '');
@@ -219,7 +229,7 @@ class Pedido {
             }
 
             // Historial
-            $this->registrarHistorial($pedidoId, null, 'pendiente', null, 'Pedido creado online', $conn);
+            $this->registrarHistorial($pedidoId, null, $estado, null, 'Pedido creado online', $conn);
 
             $conn->commit();
 
@@ -265,11 +275,26 @@ class Pedido {
 
         $pedido = $this->getById($pedidoId);
         if (!$pedido)           return ['error' => 'Pedido no encontrado.'];
+        if (in_array($pedido['tipo_entrega'], ['recoge_tienda','recoger_tienda'], true)) {
+            return ['error' => 'Este pedido no requiere confirmación de pago porque es para recoger en tienda.'];
+        }
         if ($pedido['estado'] !== 'pendiente')
                                 return ['error' => 'El pedido ya fue procesado.'];
 
         $detalle = $this->getDetalle($pedidoId);
         if (empty($detalle))    return ['error' => 'Pedido sin productos.'];
+
+        $inventario = new Talla();
+        $stockCheck = $inventario->validarItems(array_map(static function ($d) {
+            return [
+                'producto_id' => (int) ($d['producto_id'] ?? 0),
+                'talla' => (string) ($d['talla'] ?? ''),
+                'cantidad' => (int) ($d['cantidad'] ?? 0),
+            ];
+        }, $detalle));
+        if (!($stockCheck['success'] ?? false)) {
+            return ['error' => $stockCheck['error'] ?? 'No hay suficiente inventario para completar la venta.'];
+        }
 
         $conn->begin_transaction();
         try {
@@ -296,13 +321,40 @@ class Pedido {
                 (float)$pedido['descuento'],
                 (float)$pedido['subtotal'],
                 $pedido['descuento_id'],
-                null
+                null,
+                'online',
+                'completada',
+                false
             );
 
             if (!($resultado['success'] ?? false))
                 throw new Exception($resultado['error'] ?? 'Error al procesar venta.');
 
             $ventaId = $resultado['venta_id'];
+            $totalVenta = (float) ($resultado['total'] ?? $pedido['total']);
+
+            $facturaM = new Factura();
+            $clienteNombreFactura = trim((string) ($pedido['envio_nombre'] ?? ''));
+            if ($clienteNombreFactura === '') {
+                $clienteNombreFactura = trim((string) ($pedido['cliente_nombre'] ?? 'Cliente'));
+            }
+            $clienteTelefonoFactura = trim((string) ($pedido['envio_telefono'] ?? ''));
+            if ($clienteTelefonoFactura === '') {
+                $clienteTelefonoFactura = trim((string) ($pedido['cliente_telefono'] ?? ''));
+            }
+            $clienteDocumentoFactura = $clienteTelefonoFactura !== '' ? $clienteTelefonoFactura : 'CF';
+            $factura = $facturaM->crear(
+                $ventaId,
+                $clienteNombreFactura,
+                $clienteDocumentoFactura,
+                (float) $pedido['subtotal'],
+                (float) $pedido['descuento'],
+                $totalVenta,
+                $clienteTelefonoFactura
+            );
+            if (!($factura['success'] ?? false)) {
+                error_log('Pedido::confirmarPago factura: ' . ($factura['error'] ?? 'Error desconocido'));
+            }
 
             // Marcar venta como online
             $conn->query("UPDATE ventas SET tipo_venta='online' WHERE id={$ventaId}");
@@ -318,11 +370,63 @@ class Pedido {
             $this->registrarHistorial($pedidoId, 'pendiente', 'pagado', $usuarioId, "Pago confirmado. Venta #{$ventaId}", $conn);
 
             $conn->commit();
+
+            $detalleVenta = [];
+            $productoModel = new Producto();
+            foreach ($detalle as $item) {
+                $productoId = (int) ($item['producto_id'] ?? 0);
+                $producto = $productoId > 0 ? $productoModel->getById($productoId) : null;
+                $detalleVenta[] = [
+                    'producto_id' => $productoId,
+                    'nombre' => (string) ($producto['nombre'] ?? ''),
+                    'referencia' => (string) ($producto['codigo'] ?? $producto['referencia'] ?? ''),
+                    'talla' => trim((string) ($item['talla'] ?? '')),
+                    'cantidad' => (int) ($item['cantidad'] ?? 0),
+                    'precio_unitario' => (float) ($item['precio_unitario'] ?? 0),
+                    'subtotal' => (float) ($item['subtotal'] ?? 0),
+                ];
+            }
+
+            $this->enviarReporteVentaTelegram([
+                'origen' => 'Tienda Online',
+                'cliente_nombre' => trim((string) ($pedido['envio_nombre'] ?? ($pedido['cliente_nombre'] ?? 'Cliente'))),
+                'cliente_nit' => 'No registrado',
+                'cliente_telefono' => trim((string) ($pedido['envio_telefono'] ?? ($pedido['cliente_telefono'] ?? ''))),
+                'cliente_correo' => 'No registrado',
+                'items' => $detalleVenta,
+                'subtotal' => (float) $pedido['subtotal'],
+                'descuento' => (float) $pedido['descuento'],
+                'envio' => 0.0,
+                'total' => $totalVenta,
+                'tipo_entrega' => $pedido['tipo_entrega'] ?? 'domicilio',
+                'direccion' => trim((string) ($pedido['envio_direccion'] ?? '')),
+                'ciudad' => trim((string) ($pedido['envio_ciudad'] ?? '')),
+                'metodo_pago' => trim((string) ($pedido['metodo_pago'] ?? '')),
+                'estado_pago' => 'Completado',
+                'numero_factura' => $factura['numero_factura'] ?? '',
+                'fecha_factura' => date('Y-m-d'),
+                'hora_factura' => date('H:i'),
+            ]);
+
             return ['success' => true, 'venta_id' => $ventaId];
 
         } catch (Exception $e) {
             $conn->rollback();
             return ['error' => $e->getMessage()];
+        }
+    }
+
+    private function enviarReporteVentaTelegram(array $ventaData): void {
+        try {
+            require_once __DIR__ . '/../TelegramBot.php';
+            $bot = new TelegramBot();
+            if (!$bot->configured()) {
+                return;
+            }
+
+            $bot->enviarReporteVenta($ventaData);
+        } catch (Throwable $e) {
+            error_log('Pedido::enviarReporteVentaTelegram: ' . $e->getMessage());
         }
     }
 
@@ -335,6 +439,12 @@ class Pedido {
 
         $pedido = $this->getById($pedidoId);
         if (!$pedido) return ['error' => 'Pedido no encontrado.'];
+
+        if (in_array($pedido['tipo_entrega'], ['recoge_tienda','recoger_tienda'], true)) {
+            if ($pedido['estado'] !== 'preparando' || $nuevoEstado !== 'entregado') {
+                return ['error' => 'Los pedidos para recoger en tienda solo pueden pasar de Preparando a Entregado.'];
+            }
+        }
 
         $s = $this->db->prepare("UPDATE pedidos SET estado=? WHERE id=?");
         $s->bind_param("si", $nuevoEstado, $pedidoId);
@@ -373,10 +483,10 @@ class Pedido {
 
     public function getById(int $id): ?array {
         $s = $this->db->prepare(
-            "SELECT p.*, co.nombre as cliente_nombre, co.email as cliente_email,
-                    co.telefono as cliente_telefono
+            "SELECT p.*, COALESCE(co.nombre, p.envio_nombre) as cliente_nombre, COALESCE(co.email, '') as cliente_email,
+                    COALESCE(co.telefono, p.envio_telefono) as cliente_telefono
              FROM pedidos p
-             JOIN clientes_online co ON p.cliente_online_id = co.id
+             LEFT JOIN clientes_online co ON p.cliente_online_id = co.id
              WHERE p.id = ?"
         );
         $s->bind_param("i", $id);
@@ -420,12 +530,13 @@ class Pedido {
 
     public function getAllAdmin(string $estado = '', int $limit = 50): array {
         $where = $estado ? "WHERE p.estado='" . $this->db->escape($estado) . "'" : '';
+        $limitSql = $limit > 0 ? " LIMIT {$limit}" : '';
         $r = $this->db->query(
-            "SELECT p.*, co.nombre as cliente_nombre, co.email as cliente_email
+            "SELECT p.*, COALESCE(co.nombre, p.envio_nombre) as cliente_nombre, COALESCE(co.email, '') as cliente_email
              FROM pedidos p
-             JOIN clientes_online co ON p.cliente_online_id = co.id
+             LEFT JOIN clientes_online co ON p.cliente_online_id = co.id
              {$where}
-             ORDER BY p.creado_at DESC LIMIT {$limit}"
+             ORDER BY p.creado_at DESC{$limitSql}"
         );
         if (!$r) {
             error_log('Pedido::getAllAdmin query failed: ' . $this->db->getConnection()->error);
@@ -434,6 +545,17 @@ class Pedido {
         $a = [];
         while ($row = $r->fetch_assoc()) $a[] = $row;
         return $a;
+    }
+
+    public function countAllAdmin(string $estado = ''): int {
+        $where = $estado ? "WHERE estado='" . $this->db->escape($estado) . "'" : '';
+        $r = $this->db->query("SELECT COUNT(*) as total FROM pedidos {$where}");
+        if (!$r) {
+            error_log('Pedido::countAllAdmin query failed: ' . $this->db->getConnection()->error);
+            return 0;
+        }
+        $row = $r->fetch_assoc();
+        return (int) ($row['total'] ?? 0);
     }
 
     public function getHistorial(int $pedidoId): array {
@@ -505,31 +627,46 @@ class Pedido {
         }
 
         if (!empty($clienteOnline['cliente_id'])) {
-            return (int)$clienteOnline['cliente_id'];
+            return (int) $clienteOnline['cliente_id'];
         }
 
-        $nombre   = trim($clienteOnline['nombre'] ?? $datosEnvio['nombre'] ?? '');
-        $email    = trim(strtolower($clienteOnline['email'] ?? ''));
-        $telefono = trim($clienteOnline['telefono'] ?? $datosEnvio['telefono'] ?? '');
-        $direccion= trim($clienteOnline['direccion'] ?? $datosEnvio['direccion'] ?? '');
-        $sexo     = in_array($clienteOnline['sexo'] ?? 'O', ['M','F','O']) ? $clienteOnline['sexo'] : 'O';
+        $nombre   = trim((string) ($clienteOnline['nombre'] ?? $datosEnvio['nombre'] ?? 'Consumidor Final'));
+        $email    = trim(strtolower((string) ($clienteOnline['email'] ?? $datosEnvio['email'] ?? '')));
+        $telefono = trim((string) ($clienteOnline['telefono'] ?? $datosEnvio['telefono'] ?? ''));
+        $direccion= trim((string) ($clienteOnline['direccion'] ?? $datosEnvio['direccion'] ?? ''));
+        $sexo     = in_array($clienteOnline['sexo'] ?? 'O', ['M','F','O'], true) ? (string) $clienteOnline['sexo'] : 'O';
 
-        if (empty($nombre) || empty($email)) {
-            return null;
+        $existing = null;
+        if ($email !== '') {
+            $s = $this->db->prepare("SELECT id FROM clientes WHERE email = ? LIMIT 1");
+            $s->bind_param('s', $email);
+            $s->execute();
+            $existing = $s->get_result()->fetch_assoc() ?: null;
         }
 
-        $existing = $this->db->prepare("SELECT id FROM clientes WHERE email = ? LIMIT 1");
-        $existing->bind_param('s', $email);
-        $existing->execute();
-        $result = $existing->get_result()->fetch_assoc();
-        if ($result && !empty($result['id'])) {
-            $clienteId = (int)$result['id'];
+        if (!$existing && $telefono !== '') {
+            $s = $this->db->prepare("SELECT id FROM clientes WHERE telefono = ? LIMIT 1");
+            $s->bind_param('s', $telefono);
+            $s->execute();
+            $existing = $s->get_result()->fetch_assoc() ?: null;
+        }
+
+        if (!$existing && $nombre !== '') {
+            $s = $this->db->prepare("SELECT id FROM clientes WHERE nombre = ? LIMIT 1");
+            $s->bind_param('s', $nombre);
+            $s->execute();
+            $existing = $s->get_result()->fetch_assoc() ?: null;
+        }
+
+        if ($existing && !empty($existing['id'])) {
+            $clienteId = (int) $existing['id'];
         } else {
             $cm = new Cliente();
-            if (!$cm->create($nombre, '', $telefono, $email, $direccion, $sexo)) {
+            $documento = $telefono !== '' ? $telefono : 'CF';
+            if (!$cm->create($nombre, $documento, $telefono, $email, $direccion, $sexo)) {
                 return null;
             }
-            $clienteId = (int)$this->db->lastInsertId();
+            $clienteId = (int) $this->db->lastInsertId();
         }
 
         $co = new ClienteOnline();

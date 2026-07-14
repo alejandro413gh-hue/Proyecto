@@ -103,7 +103,7 @@ $iconos = [
           <?php foreach ($detalle as $d):
             $imgUrl = !empty($d['imagen'])
                 ? BASE_URL . '/assets/img/productos/' . $d['imagen']
-                : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+                : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
           ?>
           <div class="d-flex gap-3 mb-3">
             <img src="<?= htmlspecialchars($imgUrl) ?>" alt="<?= htmlspecialchars($d['producto_nombre']) ?>"

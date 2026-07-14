@@ -35,6 +35,7 @@ $cantidadStockBajo = count($productosStockBajo);
 // 2. Pedidos por estado
 $pedidosPorEstado = $pedidoModel->countPorEstado();
 $pedidosPendientes = $pedidoModel->getAllAdmin('pendiente', 10);
+$totalPedidos = $pedidoModel->countAllAdmin();
 
 // 3. Obtener auditoría de reportes si existe la tabla
 $auditoriaReportes = [];
@@ -405,7 +406,7 @@ if (($pedidosPorEstado['pendiente'] ?? 0) > 5) $estadoSistema = 'advertencia';
                 <div class="card-subtitle">Pedidos confirmados y entregados</div>
                 <hr style="margin: 15px 0; border: none; border-top: 1px solid #eee;">
                 <div style="font-size: 12px; color: #666;">
-                    <div>Total de transacciones: <?php echo count($pedidoModel->getAllAdmin('')) ?? 0; ?></div>
+                    <div>Total de transacciones: <?php echo number_format($totalPedidos, 0, ',', '.'); ?></div>
                 </div>
             </div>
         </div>

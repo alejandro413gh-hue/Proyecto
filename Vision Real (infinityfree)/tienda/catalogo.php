@@ -161,7 +161,7 @@ $ordenes = [
         <?php foreach ($resultado['productos'] as $p):
           $imgUrl = !empty($p['imagen'])
             ? BASE_URL . '/assets/img/productos/' . $p['imagen']
-            : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+            : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
           $tieneStock = (int)$p['stock_total'] > 0;
         ?>
         <div class="col-6 col-md-4">

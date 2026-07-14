@@ -1,7 +1,7 @@
 <?php
 /**
  * views/clientes_export.php
- * Exporta un reporte CSV con los clientes, sus ventas y los productos de cada venta.
+ * Exporta un reporte con los clientes, sus ventas y los productos de cada venta.
  */
 require_once __DIR__ . '/../config/config.php';
 requireLogin();
@@ -11,10 +11,16 @@ $db = Database::getInstance();
 
 header('Content-Type: application/vnd.ms-excel; charset=utf-8');
 header('Content-Disposition: attachment; filename="clientes_ventas_' . date('Ymd_His') . '.xls"');
-$output = fopen('php://output', 'w');
-// BOM para Excel
-fputs($output, "\xEF\xBB\xBF");
 
+echo "<html><head><meta charset='utf-8'><style>";
+echo "table{border-collapse:collapse;width:100%;font-family:Arial,sans-serif;}";
+echo "th,td{border:1px solid #666;padding:8px;vertical-align:top;}";
+echo "th{background:#2F4F4F;color:#fff;font-weight:bold;text-align:center;}";
+echo "td{text-align:left;white-space:normal;word-wrap:break-word;}";
+echo "td.numeric{text-align:right;mso-number-format:'\\0024 #,##0';}";
+echo "td.center{text-align:center;}";
+echo "</style></head><body>";
+echo "<table><thead><tr>";
 $headers = [
     'Cliente ID',
     'Cliente Nombre',
@@ -35,7 +41,10 @@ $headers = [
     'Subtotal Producto',
     'Vendedor'
 ];
-fputcsv($output, $headers);
+foreach ($headers as $header) {
+    echo "<th>" . htmlspecialchars($header, ENT_QUOTES, 'UTF-8') . "</th>";
+}
+echo "</tr></thead><tbody>";
 
 $query = "SELECT
     c.id AS cliente_id,
@@ -67,29 +76,28 @@ ORDER BY c.nombre ASC, v.fecha DESC, v.id ASC";
 $result = $db->prepare($query);
 $result->execute();
 $res = $result->get_result();
-
 while ($row = $res->fetch_assoc()) {
-    fputcsv($output, [
-        $row['cliente_id'],
-        $row['cliente_nombre'],
-        $row['cliente_sexo'],
-        $row['cliente_nit'],
-        $row['cliente_telefono'],
-        $row['cliente_email'],
-        $row['cliente_direccion'],
-        $row['venta_id'],
-        $row['venta_fecha'],
-        $row['venta_estado'],
-        $row['venta_total'],
-        $row['producto_id'],
-        $row['producto_nombre'],
-        $row['producto_talla'],
-        $row['producto_cantidad'],
-        $row['producto_precio'],
-        $row['producto_subtotal'],
-        $row['vendedor_nombre'],
-    ]);
+    echo "<tr>";
+    echo "<td class='center'>" . (int)$row['cliente_id'] . "</td>";
+    echo "<td>" . htmlspecialchars($row['cliente_nombre'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td class='center'>" . htmlspecialchars($row['cliente_sexo'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td>" . htmlspecialchars($row['cliente_nit'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td>" . htmlspecialchars($row['cliente_telefono'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td>" . htmlspecialchars($row['cliente_email'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td>" . nl2br(htmlspecialchars($row['cliente_direccion'], ENT_QUOTES, 'UTF-8')) . "</td>";
+    echo "<td class='center'>" . (int)$row['venta_id'] . "</td>";
+    echo "<td class='center'>" . htmlspecialchars($row['venta_fecha'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td class='center'>" . htmlspecialchars($row['venta_estado'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td class='numeric'>" . number_format((float)$row['venta_total'], 0, '.', '') . "</td>";
+    echo "<td class='center'>" . (int)$row['producto_id'] . "</td>";
+    echo "<td>" . htmlspecialchars($row['producto_nombre'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td class='center'>" . htmlspecialchars($row['producto_talla'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "<td class='center'>" . (int)$row['producto_cantidad'] . "</td>";
+    echo "<td class='numeric'>" . number_format((float)$row['producto_precio'], 0, '.', '') . "</td>";
+    echo "<td class='numeric'>" . number_format((float)$row['producto_subtotal'], 0, '.', '') . "</td>";
+    echo "<td>" . htmlspecialchars($row['vendedor_nombre'], ENT_QUOTES, 'UTF-8') . "</td>";
+    echo "</tr>";
 }
 
-fclose($output);
+echo "</tbody></table></body></html>";
 exit();

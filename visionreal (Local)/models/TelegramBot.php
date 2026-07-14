@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../models/Producto.php';
+require_once __DIR__ . '/../models/Talla.php';
 require_once __DIR__ . '/../models/tienda/Pedido.php';
 
 class TelegramBot {
@@ -22,6 +23,190 @@ class TelegramBot {
     public function configured(): bool {
         return (defined('TELEGRAM_REPORT_ENABLED') ? (bool) TELEGRAM_REPORT_ENABLED : true)
             && !empty($this->token);
+    }
+
+    public function enviarReporteVenta(array $ventaData): array {
+        if (!$this->configured()) {
+            return ['success' => false, 'error' => 'Telegram no está configurado.'];
+        }
+
+        $mensaje = $this->buildVentaReportMessage($ventaData);
+        if (trim($mensaje) === '') {
+            return ['success' => false, 'error' => 'No hay contenido para enviar en el reporte de venta.'];
+        }
+
+        try {
+            return $this->sendMessage($mensaje);
+        } catch (Throwable $e) {
+            error_log('TelegramBot::enviarReporteVenta: ' . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function buildVentaReportMessage(array $ventaData): string {
+        $origen = $this->normalizeText($ventaData['origen'] ?? 'Tienda Online', 'Tienda Online');
+        $clienteNombre = $this->normalizeText($ventaData['cliente_nombre'] ?? '', 'No registrado');
+        $clienteNit = $this->normalizeText($ventaData['cliente_nit'] ?? '', 'No registrado');
+        $clienteTelefono = $this->normalizeText($ventaData['cliente_telefono'] ?? '', 'No registrado');
+        $clienteCorreo = $this->normalizeText($ventaData['cliente_correo'] ?? '', 'No registrado');
+
+        $items = is_array($ventaData['items'] ?? null) ? $ventaData['items'] : [];
+        $productosTexto = [];
+        foreach ($items as $index => $item) {
+            $productoNombre = $this->normalizeText($item['nombre'] ?? $item['producto_nombre'] ?? '', 'Producto');
+            $referencia = $this->normalizeText($item['referencia'] ?? $item['codigo'] ?? '', 'No registrado');
+            $talla = trim((string) ($item['talla'] ?? ''));
+            $tallaTexto = $talla !== '' ? $talla : 'No registrada';
+            $cantidad = (int) ($item['cantidad'] ?? 0);
+            $precio = $this->formatCurrency((float) ($item['precio_unitario'] ?? 0));
+            $subtotal = $this->formatCurrency((float) ($item['subtotal'] ?? 0));
+            $stock = isset($item['stock_restante'])
+                ? (int) $item['stock_restante']
+                : $this->getStockRestante((int) ($item['producto_id'] ?? 0), $talla);
+
+            $productosTexto[] = implode("\n", [
+                ($index + 1) . '️⃣ ' . $productoNombre,
+                '',
+                'Referencia:',
+                $referencia,
+                '',
+                'Talla:',
+                $tallaTexto,
+                '',
+                'Cantidad:',
+                (string) $cantidad,
+                '',
+                'Precio:',
+                $precio,
+                '',
+                'Subtotal:',
+                $subtotal,
+            ]);
+        }
+
+        $tipoEntrega = trim((string) ($ventaData['tipo_entrega'] ?? ''));
+        if ($tipoEntrega === 'domicilio') {
+            $tipoEntregaTexto = 'Domicilio';
+        } elseif ($tipoEntrega === 'recoge_tienda' || $tipoEntrega === 'recoger_tienda') {
+            $tipoEntregaTexto = 'Recoger en tienda';
+        } else {
+            $tipoEntregaTexto = $this->normalizeText($tipoEntrega, 'No registrado');
+        }
+
+        $direccion = $this->normalizeText($ventaData['direccion'] ?? '', 'No registrado');
+        $ciudad = $this->normalizeText($ventaData['ciudad'] ?? '', 'No registrado');
+        $metodoPago = $this->normalizeText($ventaData['metodo_pago'] ?? '', 'No registrado');
+        $estadoPago = $this->normalizeText($ventaData['estado_pago'] ?? 'Completado', 'Completado');
+        $numeroFactura = $this->normalizeText($ventaData['numero_factura'] ?? '', 'No registrado');
+        $fechaFactura = $this->normalizeText($ventaData['fecha_factura'] ?? date('Y-m-d'), date('Y-m-d'));
+        $horaFactura = $this->normalizeText($ventaData['hora_factura'] ?? date('H:i'), date('H:i'));
+
+        $subtotal = $this->formatCurrency((float) ($ventaData['subtotal'] ?? 0));
+        $descuento = $this->formatCurrency((float) ($ventaData['descuento'] ?? 0));
+        $envio = $this->formatCurrency((float) ($ventaData['envio'] ?? 0));
+        $total = $this->formatCurrency((float) ($ventaData['total'] ?? 0));
+
+        $inventarioTexto = [];
+        if (empty($items)) {
+            $inventarioTexto[] = 'No hay productos disponibles.';
+        } else {
+            foreach ($items as $item) {
+                $productoNombre = $this->normalizeText($item['nombre'] ?? $item['producto_nombre'] ?? '', 'Producto');
+                $talla = trim((string) ($item['talla'] ?? ''));
+                $tallaTexto = $talla !== '' ? $talla : 'Sin talla';
+                $stock = isset($item['stock_restante'])
+                    ? (int) $item['stock_restante']
+                    : $this->getStockRestante((int) ($item['producto_id'] ?? 0), $talla);
+                $inventarioTexto[] = $productoNombre . "\n" . 'Talla ' . $tallaTexto . "\n" . $stock . ' unidades';
+            }
+        }
+
+        $mensaje = [];
+        $mensaje[] = '🛒 NUEVA VENTA REGISTRADA';
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '🏪 Origen:';
+        $mensaje[] = $origen;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '👤 Cliente';
+        $mensaje[] = '• Nombre: ' . $clienteNombre;
+        $mensaje[] = '• Cédula/NIT: ' . $clienteNit;
+        $mensaje[] = '• Teléfono: ' . $clienteTelefono;
+        $mensaje[] = '• Correo: ' . $clienteCorreo;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '📦 Productos';
+        $mensaje[] = '';
+        $mensaje[] = implode("\n\n", $productosTexto);
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '💰 Resumen';
+        $mensaje[] = 'Subtotal: ' . $subtotal;
+        $mensaje[] = 'Descuento: ' . $descuento;
+        $mensaje[] = 'Envío: ' . $envio;
+        $mensaje[] = 'Total: ' . $total;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '🚚 Entrega';
+        $mensaje[] = 'Tipo: ' . $tipoEntregaTexto;
+        $mensaje[] = 'Dirección: ' . $direccion;
+        $mensaje[] = 'Ciudad: ' . $ciudad;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '💳 Pago';
+        $mensaje[] = 'Método: ' . $metodoPago;
+        $mensaje[] = 'Estado: ' . $estadoPago;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '🧾 Factura';
+        $mensaje[] = 'Número: ' . $numeroFactura;
+        $mensaje[] = 'Fecha: ' . $fechaFactura;
+        $mensaje[] = 'Hora: ' . $horaFactura;
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '📊 Inventario';
+        $mensaje[] = '';
+        $mensaje[] = implode("\n\n", $inventarioTexto);
+        $mensaje[] = '';
+        $mensaje[] = '━━━━━━━━━━━━━━━━━━━━━━';
+        $mensaje[] = '';
+        $mensaje[] = '✅ Estado';
+        $mensaje[] = '';
+        $mensaje[] = 'Venta registrada correctamente.';
+
+        return implode("\n", $mensaje);
+    }
+
+    private function getStockRestante(int $productoId, string $talla): int {
+        if ($productoId <= 0) {
+            return 0;
+        }
+
+        try {
+            $inventario = new Talla();
+            return $inventario->getStockDisponible($productoId, $talla);
+        } catch (Throwable $e) {
+            error_log('TelegramBot::getStockRestante: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    private function normalizeText($value, string $fallback = 'No registrado'): string {
+        $text = trim((string) ($value ?? ''));
+        return $text !== '' ? $text : $fallback;
+    }
+
+    private function formatCurrency(float $value): string {
+        return '$' . number_format($value, 0, ',', '.');
     }
 
     public function sendMessage(string $message, ?string $parseMode = null): array {
@@ -459,7 +644,8 @@ class TelegramBot {
 
         $lines = preg_split("/
 |
-|/", $message) ?: [$message];
+|
+/", $message) ?: [$message];
         $chunks = [];
         $current = '';
 

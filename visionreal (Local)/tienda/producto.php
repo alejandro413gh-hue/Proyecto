@@ -22,7 +22,7 @@ $cliente    = getTiendaCliente();
 
 $imgUrl = !empty($p['imagen'])
     ? BASE_URL . '/assets/img/productos/' . $p['imagen']
-    : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+    : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
 
 $tieneStock = (int)$p['stock_total'] > 0;
 ?><!DOCTYPE html>

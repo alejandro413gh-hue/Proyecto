@@ -109,7 +109,7 @@ include __DIR__ . '/partials/head.php';
     <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px">
       <!-- Buscador -->
       <div class="search-input-wrap" style="max-width:400px">
-        <span class="search-icon">🔍</span>
+        
         <input type="text" id="buscar-general" placeholder="Buscar por nombre, código o categoría..." style="padding:8px 12px">
       </div>
       

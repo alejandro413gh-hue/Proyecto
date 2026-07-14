@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: sql209.infinityfree.com
--- Tiempo de generación: 02-07-2026 a las 09:21:34
+-- Tiempo de generación: 12-07-2026 a las 22:40:43
 -- Versión del servidor: 11.4.12-MariaDB
 -- Versión de PHP: 7.2.22
 
@@ -41,7 +41,8 @@ CREATE TABLE `carrito` (
 
 INSERT INTO `carrito` (`id`, `cliente_online_id`, `creado_at`, `actualizado_at`) VALUES
 (1, 1, '2026-05-27 20:12:37', '2026-05-27 20:12:37'),
-(2, 3, '2026-05-28 11:27:05', '2026-05-28 11:27:05');
+(2, 3, '2026-05-28 11:27:05', '2026-05-28 11:27:05'),
+(3, 5, '2026-07-11 00:05:07', '2026-07-11 00:05:07');
 
 -- --------------------------------------------------------
 
@@ -58,6 +59,14 @@ CREATE TABLE `carrito_items` (
   `precio_unitario` decimal(12,2) NOT NULL,
   `agregado_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `carrito_items`
+--
+
+INSERT INTO `carrito_items` (`id`, `carrito_id`, `producto_id`, `talla`, `cantidad`, `precio_unitario`, `agregado_at`) VALUES
+(19, 3, 12, 'L', 1, '47000.00', '2026-07-11 00:49:19'),
+(20, 3, 2, 'L', 1, '85000.00', '2026-07-11 01:10:06');
 
 -- --------------------------------------------------------
 
@@ -107,7 +116,8 @@ CREATE TABLE `clientes` (
 
 INSERT INTO `clientes` (`id`, `nombre`, `sexo`, `telefono`, `email`, `direccion`, `created_at`, `factura`, `nit`) VALUES
 (12, 'Alejandro Gutierrez', 'M', '3102813913', 'alejandro413gh@gmail.com', '', '2026-05-28 04:44:08', NULL, ''),
-(13, 'Kenyi Contreras', 'M', '3115523760', 'brayanarmesto17@gmail.com', '', '2026-05-28 11:27:52', NULL, '');
+(13, 'Kenyi Contreras', 'M', '3115523760', 'brayanarmesto17@gmail.com', '', '2026-05-28 11:27:52', NULL, ''),
+(14, 'susana', 'F', '', 'su@gmail.com', '', '2026-07-11 00:05:22', NULL, '');
 
 -- --------------------------------------------------------
 
@@ -137,9 +147,8 @@ CREATE TABLE `clientes_online` (
 --
 
 INSERT INTO `clientes_online` (`id`, `cliente_id`, `nombre`, `email`, `password`, `telefono`, `direccion`, `ciudad`, `sexo`, `activo`, `verificado`, `token_verificar`, `created_at`, `updated_at`) VALUES
-(1, 12, 'Alejandro Gutierrez', 'alejandro413gh@gmail.com', '$2y$10$4sCx96Gm.lqy5KGRU4v4E.1d7BcjzizEUIx6XxZhOwH50KOPwx6be', '3102813913', '', '', 'M', 1, 0, '90c460601b054363862a347e9cedcf69d393919ccd3f3ec371b21dafefc99e36', '2026-05-27 19:28:01', '2026-05-28 04:44:08'),
-(2, NULL, 'Rufay Alejandro', 'rufay0813@gmail.com', '$2y$10$iIHzfvjNHTLS.WW5ZcceM.uLKYKbunbIb1n/o3rBxQhWZu3f9YgTm', '312046040', '', '', 'M', 1, 0, '3c08bd79648a5389b4339a59e7855aa81bd39c0449f0bb66f00d923c9dc8df9a', '2026-05-27 19:32:38', '2026-05-27 19:32:38'),
-(3, 13, 'Kenyi Contreras', 'brayanarmesto17@gmail.com', '$2y$10$CxuGIPmubW3dlND2z9Br3Oxkn1UWUiJLST1jCg6/Su4BjhErpwF36', '3115523760', '', '', 'M', 1, 0, 'fa223916ae15759bb59a9407436a7526c3abb57a9a5c83233379a6d9bd7748eb', '2026-05-28 11:26:43', '2026-05-28 11:27:52');
+(5, 14, 'susana', 'su@gmail.com', '$2y$10$uIfNOpAsb.qAfbGJnW4JQuXSUDqAxtBB92IXlYYrLe8R2RGWZRDoS', '', '', '', 'F', 1, 0, '11272a3056ce370c317befff4188bb948346bd885368f776787b22054f5e73da', '2026-07-11 00:04:27', '2026-07-11 00:05:22'),
+(6, NULL, 'Pedro', 'p@gmail.com', '$2y$10$koM9YhuaPKRvHI/f9a.Px.HkTfCltBurYJOCtgQbjbvKDT/KXZk0u', '', '', '', 'O', 1, 0, '46ea452f59549fe735f5646ab7b4b20b0c3162b9a017b3f76a8e4cde631d7d9d', '2026-07-12 02:25:00', '2026-07-12 02:25:00');
 
 -- --------------------------------------------------------
 
@@ -160,9 +169,9 @@ CREATE TABLE `clientes_online_sesiones` (
 --
 
 INSERT INTO `clientes_online_sesiones` (`id`, `cliente_id`, `token`, `expira_at`, `creado_at`) VALUES
-(5, 1, 'f58d327049b21cadde67aed06fb35d1bc4a44cf0fb237bd30b435ed90d200d59', '2026-06-26 15:34:25', '2026-05-27 20:34:25'),
-(6, 1, '90c608ac99dce2e47ccc07582b4b28bce3575644dce1483895dffbb931924781', '2026-06-26 17:34:42', '2026-05-27 22:34:43'),
-(7, 3, '9e6bdd32d0ca9a150dca68c21e2bf43c0f32139ff40e825efa3b9a13a7275673', '2026-06-27 06:26:43', '2026-05-28 11:26:43');
+(1, 4, 'e8137bbc9f1af5ac50237bfee2b50e8015891eb949affbdca46609b070aa839d', '2026-08-09 17:24:04', '2026-07-10 22:24:04'),
+(9, 5, 'b0f103e3d4d447d83d65b92863c00bdb93431009df822945212fedf9c51ec4fb', '2026-08-09 19:04:28', '2026-07-11 00:04:29'),
+(10, 6, 'fbdd4caacd87127634c5dc7f1b88e594e277812960225f3f3807cb5f698f3fcd', '2026-08-10 21:25:00', '2026-07-12 02:25:00');
 
 -- --------------------------------------------------------
 
@@ -372,7 +381,8 @@ INSERT INTO `pedidos` (`id`, `numero_pedido`, `cliente_online_id`, `cliente_id`,
 (13, 'ON-20260528-0002', 1, 12, NULL, 'cancelado', 'recoge_tienda', '190000.00', '19000.00', 6, '171000.00', '', 'Alejandro Gutierrez', '3102813913', '', '', 'nequi', NULL, NULL, '2026-05-28 11:23:49', '2026-05-28 14:04:41', '2271ea337aa8c9450a80121655e8218b'),
 (14, 'ON-20260528-0003', 3, 13, 13, 'entregado', 'recoge_tienda', '1410000.00', '141000.00', 6, '1269000.00', '', 'Kenyi Contreras', '3115523760', '', '', 'contraentrega', 'nequi', NULL, '2026-05-28 11:27:52', '2026-05-28 14:04:32', '843234d1a0f96527f00f7df2848e3f1a'),
 (15, 'ON-20260528-0004', 3, 13, 14, 'entregado', 'domicilio', '55000.00', '5500.00', 6, '49500.00', 'Pene', 'Kenyi Contreras', '3115523760', 'Dónde suma', 'Venezuela', 'contraentrega', 'nequi', NULL, '2026-05-28 11:30:07', '2026-05-28 14:04:21', 'defe40ccdee14f62a983a5a68633b3dd'),
-(16, 'ON-20260528-0005', 3, 13, 15, 'entregado', 'domicilio', '47000.00', '4700.00', 6, '42300.00', '', 'Kenyi Contreras', '3115523760', 'Cara', 'Venezuela', 'contraentrega', 'j', NULL, '2026-05-28 11:31:28', '2026-05-28 11:34:52', '608b1b828f599555bb0da0314265f099');
+(16, 'ON-20260528-0005', 3, 13, 15, 'entregado', 'domicilio', '47000.00', '4700.00', 6, '42300.00', '', 'Kenyi Contreras', '3115523760', 'Cara', 'Venezuela', 'contraentrega', 'j', NULL, '2026-05-28 11:31:28', '2026-05-28 11:34:52', '608b1b828f599555bb0da0314265f099'),
+(17, 'ON-20260710-0001', 5, 14, NULL, 'cancelado', 'recoge_tienda', '45000.00', '0.00', NULL, '45000.00', '', 'susana', '312122222', '', '', 'transferencia', NULL, NULL, '2026-07-11 00:05:22', '2026-07-11 00:06:07', 'cb0b194b927ebe625c0d5f00f73a7276');
 
 -- --------------------------------------------------------
 
@@ -415,7 +425,8 @@ INSERT INTO `pedido_detalle` (`id`, `pedido_id`, `producto_id`, `talla`, `cantid
 (18, 13, 10, 'Único', 2, '95000.00', '190000.00'),
 (19, 14, 12, 'S', 30, '47000.00', '1410000.00'),
 (20, 15, 3, 'XS', 1, '55000.00', '55000.00'),
-(21, 16, 12, 'S', 1, '47000.00', '47000.00');
+(21, 16, 12, 'S', 1, '47000.00', '47000.00'),
+(22, 17, 1, 'L', 1, '45000.00', '45000.00');
 
 -- --------------------------------------------------------
 
@@ -487,7 +498,9 @@ INSERT INTO `pedido_historial` (`id`, `pedido_id`, `estado_ant`, `estado_new`, `
 (53, 14, 'preparando', 'enviado', 15, '', '2026-05-28 14:04:27'),
 (54, 14, 'enviado', 'entregado', 15, '', '2026-05-28 14:04:32'),
 (55, 13, 'pendiente', 'cancelado', 15, '', '2026-05-28 14:04:41'),
-(56, 12, 'pendiente', 'cancelado', 15, '', '2026-05-28 14:04:42');
+(56, 12, 'pendiente', 'cancelado', 15, '', '2026-05-28 14:04:42'),
+(57, 17, NULL, 'pendiente', NULL, 'Pedido creado online', '2026-07-11 00:05:22'),
+(58, 17, 'pendiente', 'cancelado', 15, 'no pago', '2026-07-11 00:06:07');
 
 -- --------------------------------------------------------
 
@@ -514,7 +527,7 @@ CREATE TABLE `productos` (
 --
 
 INSERT INTO `productos` (`id`, `codigo`, `nombre`, `descripcion`, `precio`, `stock`, `categoria_id`, `imagen`, `activo`, `visible_tienda`, `created_at`) VALUES
-(1, 'VR-0001', 'Blusa Floral Manga Corta', '', '45000.00', 179, 1, 'prod_1779710006_3328.webp', 1, 1, '2026-04-10 23:05:14'),
+(1, 'VR-0001', 'Blusa Floral Manga Corta', '', '45000.00', 189, 1, 'prod_1779710006_3328.webp', 1, 1, '2026-04-10 23:05:14'),
 (2, 'VR-0002', 'Vestido Casual Verano', '', '85000.00', 2972, 1, 'prod_1779710033_3812.jpg', 1, 1, '2026-04-10 23:05:14'),
 (3, 'VR-0003', 'Blusa Formal Blanca', '', '55000.00', 148, 2, 'prod_1779710059_2793.jpg', 1, 1, '2026-04-10 23:05:14'),
 (4, 'VR-0004', 'Pantalón Formal Dama', '', '75000.00', 37, 2, 'prod_1779710104_9964.jpg', 1, 1, '2026-04-10 23:05:14'),
@@ -524,10 +537,10 @@ INSERT INTO `productos` (`id`, `codigo`, `nombre`, `descripcion`, `precio`, `sto
 (8, 'VR-0008', 'Pantalón Formal Caballero', '', '80000.00', 27, 4, 'prod_1779710237_7820.jpg', 1, 1, '2026-04-10 23:05:14'),
 (9, 'VR-0009', 'Cinturón de Cuero', '', '35000.00', 30, 5, 'prod_1779710263_7758.webp', 1, 1, '2026-04-10 23:05:14'),
 (10, 'VR-0010', 'Bolso Casual Dama', '', '95000.00', 8, 5, 'prod_1779710313_8389.jpg', 1, 1, '2026-04-10 23:05:14'),
-(11, 'VR-0011', 'camisa obersai', '', '54000.00', 19, 3, NULL, 0, 0, '2026-04-11 18:31:34'),
-(12, 'VR-0012', 'Camisa oversize', '', '47000.00', 43, 3, 'prod_1779710387_1835.webp', 1, 1, '2026-04-11 19:02:40'),
-(13, 'VR-0013', 'camisa ovbersai', '', '43000.00', 34, 3, NULL, 0, 0, '2026-05-06 12:56:45'),
-(14, 'VR-0014', 'aaaa', '', '12333.00', 1, 5, NULL, 1, 0, '2026-06-30 21:58:53');
+(11, 'DEL001177971016', 'camisa obersai', '', '54000.00', 19, 3, NULL, 0, 0, '2026-04-11 18:31:34'),
+(12, 'VR-0011', 'Camisa oversize', '', '47000.00', 54, 3, 'prod_1779710387_1835.webp', 1, 1, '2026-04-11 19:02:40'),
+(13, 'DEL001377971016', 'camisa ovbersai', '', '43000.00', 34, 3, NULL, 0, 0, '2026-05-06 12:56:45'),
+(14, 'DEL001477980795', 'aaaa', '', '12333.00', 1, 5, NULL, 0, 0, '2026-06-30 21:58:53');
 
 -- --------------------------------------------------------
 
@@ -586,11 +599,11 @@ INSERT INTO `producto_tallas` (`id`, `producto_id`, `talla`, `stock`) VALUES
 (37, 9, 'Único', 30),
 (38, 10, 'Único', 8),
 (44, 3, 'XL', 31),
-(51, 1, 'XXL', 0),
+(51, 1, 'XXL', 10),
 (52, 11, 'L', 13),
 (53, 11, 'S', 6),
 (54, 12, 'L', 43),
-(55, 12, 'S', 0);
+(55, 12, 'S', 11);
 
 -- --------------------------------------------------------
 
@@ -618,6 +631,31 @@ INSERT INTO `promociones` (`id`, `nombre`, `descripcion`, `tipo`, `valor`, `comp
 (2, 'Cliente Frecuente', 'Descuento especial por 3 o más compras', 'porcentaje', '10.00', 3, 1, '2026-04-10 23:05:15'),
 (3, 'Cliente VIP', '15% para clientes con 5 o más compras', 'porcentaje', '15.00', 5, 1, '2026-04-10 23:05:15'),
 (4, 'Descuento $20.000', 'Descuento fijo para clientes con 2 o más compras', 'monto_fijo', '20000.00', 2, 1, '2026-04-10 23:05:15');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `store_settings`
+--
+
+CREATE TABLE `store_settings` (
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `store_settings`
+--
+
+INSERT INTO `store_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES
+('google_maps_url', 'https://www.google.com/maps/place/7%C2%B050\'26.2%22N+72%C2%B028\'32.1%22W/@7.840597,-72.475572,17z/data=!3m1!4b1!4m4!3m3!8m2!3d7.840597!4d-72.475572!18m1!1e1?entry=ttu&g_ep=EgoyMDI2MDcwOC4wIKXMDSoASAFQAw%3D%3D', '2026-07-11 01:46:58'),
+('latitude', '7.840611', '2026-07-11 01:46:36'),
+('longitude', '-72.475583', '2026-07-11 01:46:36'),
+('physical_address', 'Carrera 13 3N-80 Barrio Sangregorio', '2026-07-11 01:09:36'),
+('store_name', 'Visión Real', '2026-07-11 01:09:36'),
+('support_email', 'rufay0813@gmail.com', '2026-07-11 01:09:36'),
+('whatsapp_number', '573125420576', '2026-07-11 01:44:27');
 
 -- --------------------------------------------------------
 
@@ -684,10 +722,10 @@ CREATE TABLE `usuarios` (
 INSERT INTO `usuarios` (`id`, `nombre`, `email`, `password`, `rol`, `activo`, `created_at`) VALUES
 (12, 'Admin', 'admin@visionreal.com', '$2y$10$/rzel7vB1xGpfs8F5/7v7eTD2fU3zmCRtYkRJEbfsm9b2IqE9Pfzu', 'administrador', 0, '2026-05-04 12:37:54'),
 (13, 'Vendedor', 'vendedor@visionreal.com', '$2y$10$92IXUNpkmORZe9bW4lKvSuXYPWxKTzPJC2hNtNMBgcOgX6uPFiI4K', 'vendedor', 1, '2026-05-04 12:37:54'),
-(14, 'Kenyi contreras', 'brahyannarmesto17@gmail.com', '$2y$10$/GogtW31DTe0RNXfSoTcTu9/8zKq5bWJzGDts0pvcHvmJF5IyAYem', 'administrador', 1, '2026-05-06 12:20:06'),
+(14, 'Kenyi contreras', 'brahyannarmesto17@gmail.com', '$2y$10$G5LK.inI5FrGMSsfvPjIMOvSRzT2f1Aykl70ji4oHSrR6jbIPcFRe', 'administrador', 1, '2026-05-06 12:20:06'),
 (15, 'Rufay', 'rufay@gmail.com', '$2y$10$QG55CrSTGtE9GquQiq5zEey..smRcvMxuVLvmS2dq2kJpI8nfLq/2', 'administrador', 1, '2026-05-06 12:40:59'),
-(16, 'Santiago Rangel', 'santirangelaparicio248@gmail.com', '$2y$10$Z6USgdDxelYdm7oKoqcd/uu3tfQhJIrtdlhwOqIel4P.W2o/ccosK', 'administrador', 1, '2026-05-07 13:17:01'),
-(17, 'alexandra medina', 'medinasharik82@gmail.com', '$2y$10$N3irEJEDGxKIruS1RuDIie6NJa1td9hIgnHtiXlk1Sp/gvSmpzdZG', 'administrador', 1, '2026-06-30 12:16:59');
+(16, 'Santiago Rangel', 'santirangelaparicio248@gmail.com', '$2y$10$u4u/SlT83MRpe4ASZyEq.OSp2ofZdmRxNy1BVIwY5Ju97Mj6oN0g2', 'administrador', 1, '2026-05-07 13:17:01'),
+(17, 'alexandra medina', 'medinasharik82@gmail.com', '$2y$10$hKWbXlBies3UY9hn4Hn1lefJXX1CihYnfbv7EgddfuukHIGZWKqZW', 'administrador', 1, '2026-06-30 12:16:59');
 
 -- --------------------------------------------------------
 
@@ -871,6 +909,12 @@ ALTER TABLE `promociones`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indices de la tabla `store_settings`
+--
+ALTER TABLE `store_settings`
+  ADD PRIMARY KEY (`setting_key`);
+
+--
 -- Indices de la tabla `telegram_alert_state`
 --
 ALTER TABLE `telegram_alert_state`
@@ -907,13 +951,13 @@ ALTER TABLE `ventas`
 -- AUTO_INCREMENT de la tabla `carrito`
 --
 ALTER TABLE `carrito`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT de la tabla `carrito_items`
 --
 ALTER TABLE `carrito_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de la tabla `categorias`
@@ -925,19 +969,19 @@ ALTER TABLE `categorias`
 -- AUTO_INCREMENT de la tabla `clientes`
 --
 ALTER TABLE `clientes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de la tabla `clientes_online`
 --
 ALTER TABLE `clientes_online`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `clientes_online_sesiones`
 --
 ALTER TABLE `clientes_online_sesiones`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `descuentos`
@@ -967,19 +1011,19 @@ ALTER TABLE `pagos_tienda`
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT de la tabla `pedido_detalle`
 --
 ALTER TABLE `pedido_detalle`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT de la tabla `pedido_historial`
 --
 ALTER TABLE `pedido_historial`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
 
 --
 -- AUTO_INCREMENT de la tabla `productos`

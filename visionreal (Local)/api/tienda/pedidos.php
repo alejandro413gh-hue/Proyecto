@@ -142,7 +142,7 @@ switch ($action) {
 
         // Bodeguero solo puede cambiar a preparando/enviado
         if (isGestor()) {
-            $permitidos = ['preparando', 'enviado'];
+            $permitidos = ['preparando', 'enviado', 'entregado'];
             if (!in_array($nuevoEstado, $permitidos)) {
                 echo json_encode(['error' => 'No tienes permiso para ese estado']);
                 break;

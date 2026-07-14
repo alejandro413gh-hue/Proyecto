@@ -32,9 +32,29 @@ class Cliente {
         $s=$this->db->prepare("SELECT * FROM clientes WHERE id=?");
         $s->bind_param("i",$id);$s->execute();return $s->get_result()->fetch_assoc();
     }
+    public $lastError = '';
+
     public function create($n,$nit='',$t='',$e='',$d='',$sexo='O') {
-        $s=$this->db->prepare("INSERT INTO clientes(nombre,sexo,telefono,email,direccion,nit)VALUES(?,?,?,?,?,?)");
-        $s->bind_param("ssssss",$n,$sexo,$t,$e,$d,$nit);return $s->execute();
+        $this->lastError = '';
+        try {
+            $s = $this->db->prepare("INSERT INTO clientes(nombre,sexo,telefono,email,direccion,nit)VALUES(?,?,?,?,?,?)");
+            if (!$s) {
+                $this->lastError = 'No se pudo preparar el INSERT de cliente: ' . $this->db->getConnection()->error;
+                error_log('Cliente::create prepare() fallo: ' . $this->lastError);
+                return false;
+            }
+            $s->bind_param("ssssss",$n,$sexo,$t,$e,$d,$nit);
+            $ok = $s->execute();
+            if (!$ok) {
+                $this->lastError = 'No se pudo ejecutar el INSERT de cliente: ' . $s->error;
+                error_log('Cliente::create execute() fallo: ' . $this->lastError);
+            }
+            return $ok;
+        } catch (\Throwable $ex) {
+            $this->lastError = $ex->getMessage();
+            error_log('Cliente::create excepcion: ' . $this->lastError);
+            return false;
+        }
     }
     public function update($id,$n,$nit='',$t='',$e='',$d='',$sexo='O') {
         $s=$this->db->prepare("UPDATE clientes SET nombre=?,sexo=?,telefono=?,email=?,direccion=?,nit=? WHERE id=?");

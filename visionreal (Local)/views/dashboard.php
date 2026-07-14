@@ -40,6 +40,7 @@ include __DIR__ . '/partials/head.php';
     <div class="card" style="margin-bottom:24px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
       <div>
         <div class="card-title" style="margin-bottom:6px">Telegram Bot</div>
+          
         <div style="color:var(--white-muted);font-size:.86rem;line-height:1.5">
           Envía un reporte con productos escasos, pedidos pendientes y pedidos para revisión al grupo configurado en Telegram.
         </div>

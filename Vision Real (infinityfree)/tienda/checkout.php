@@ -204,7 +204,7 @@ if (empty($contenido['items'])) {
         <?php foreach ($contenido['items'] as $item):
           $imgUrl = !empty($item['imagen'])
             ? BASE_URL . '/assets/img/productos/' . $item['imagen']
-            : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+            : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
         ?>
         <div class="d-flex gap-3 mb-3 pb-3 border-bottom">
           <img src="<?= htmlspecialchars($imgUrl) ?>" alt="<?= htmlspecialchars($item['nombre']) ?>"

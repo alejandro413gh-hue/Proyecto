@@ -3,7 +3,7 @@
  * OllamaClient v3.0 - Fallback Inteligente
  * 
  * Sistema robusto con:
- * - Fallback automático Groq → Ollama local
+ * - Fallback automático Hugging Face → Ollama local
  * - Caché para evitar gastar cuota
  * - Logging detallado
  * - Configuración flexible
@@ -14,8 +14,8 @@
  * define('AI_REPORT_PROVIDER', 'remote');
  * 
  * // API Remota
- * define('AI_REMOTE_ENDPOINT', 'https://api.groq.com/openai/v1/chat/completions');
- * define('AI_REMOTE_TOKEN', 'gsk_xxx');
+ * define('AI_REMOTE_ENDPOINT', 'https://router.huggingface.co/v1');
+ * define('AI_REMOTE_TOKEN', 'hf_xxx');
  * 
  * // Ollama Local (fallback)
  * define('AI_OLLAMA_BASE_URL', 'http://localhost:11434');
@@ -54,8 +54,8 @@ class OllamaClient {
         $this->provider = strtolower((string) (defined('AI_REPORT_PROVIDER') ? AI_REPORT_PROVIDER : 'ollama'));
         $this->remoteEndpoint = trim((string) (defined('AI_REMOTE_ENDPOINT') ? AI_REMOTE_ENDPOINT : ''));
         $this->remoteToken = trim((string) (defined('AI_REMOTE_TOKEN') ? AI_REMOTE_TOKEN : ''));
-        // Modelo remoto (Groq) y modelo local (Ollama) son distintos catálogos de modelos,
-        // así que se separan para no pedirle a Groq un modelo de Ollama o viceversa.
+        // El modelo remoto y el modelo local pertenecen a catálogos distintos,
+        // así que se separan para no mezclar formatos entre Hugging Face y Ollama.
         $this->remoteModel = (string) (defined('AI_REMOTE_MODEL') ? AI_REMOTE_MODEL : 'openai/gpt-oss-20b');
         $this->localModel = (string) (defined('AI_OLLAMA_MODEL') ? AI_OLLAMA_MODEL : 'gemma4:latest');
         $this->primaryModel = $this->localModel;
@@ -125,9 +125,9 @@ class OllamaClient {
                 $this->stats['fallback_used']++;
                 $result['fallback_used'] = true;
             } else {
-                // No ocultar el error original de Groq: mostrar ambos
+                // No ocultar el error original del proveedor remoto: mostrar ambos
                 $localError = $result['error'] ?? 'Unknown error';
-                $result['error'] = "Groq falló: $remoteError | Ollama local también falló: $localError";
+                $result['error'] = "Proveedor remoto falló: $remoteError | Ollama local también falló: $localError";
             }
         }
 
@@ -140,7 +140,7 @@ class OllamaClient {
     }
 
     /**
-     * Llamar API remota (Groq)
+     * Llamar API remota (Hugging Face, Gemini, Groq, OpenAI u otros proveedores compatibles)
      */
     private function callRemoteAPI(string $prompt, array $context = []): array {
         if (empty($this->remoteEndpoint)) {
@@ -154,17 +154,18 @@ class OllamaClient {
         $model = $context['model'] ?? $this->remoteModel;
         $system = (string) ($context['system'] ?? '');
         $apiType = $this->detectAPIType($this->remoteEndpoint);
+        $endpoint = $this->normalizeRemoteEndpoint($this->remoteEndpoint, $model, $apiType);
 
         // Construir payload según tipo de API
         $payload = match ($apiType) {
             'groq', 'openai', 'openrouter' => $this->buildOpenAIPayload($prompt, $model, $system),
             'google' => $this->buildGooglePayload($prompt, $model, $system),
-            'huggingface' => $this->buildHuggingFacePayload($prompt, $model),
+            'huggingface' => $this->buildOpenAIPayload($prompt, $model, $system),
             default => $this->buildOpenAIPayload($prompt, $model, $system),
         };
 
         return $this->makeRequest(
-            $this->remoteEndpoint,
+            $endpoint,
             $payload,
             'remote_api',
             $apiType,
@@ -216,14 +217,14 @@ class OllamaClient {
     }
 
     /**
-     * Construir payload estilo OpenAI (Groq)
+     * Construir payload estilo OpenAI
      */
     private function buildOpenAIPayload(string $prompt, string $model, string $system): array {
         return [
             'model' => $model,
             // array_values reindexa las claves: sin esto, cuando no hay system prompt,
             // array_filter deja huecos en el array y json_encode lo serializa como
-            // objeto {"1":...} en vez de lista [...], lo que Groq rechaza.
+            // objeto {"1":...} en vez de lista [...], lo que algunos proveedores rechazan.
             'messages' => array_values(array_filter([
                 $system ? ['role' => 'system', 'content' => $system] : null,
                 ['role' => 'user', 'content' => $prompt],
@@ -237,22 +238,29 @@ class OllamaClient {
      * Construir payload para Google Gemini
      */
     private function buildGooglePayload(string $prompt, string $model, string $system): array {
-        $content = $system ? "$system\n\n$prompt" : $prompt;
-        
-        return [
+        $payload = [
             'contents' => [
                 [
-                    'role' => 'user',
                     'parts' => [
-                        ['text' => $content]
+                        ['text' => $prompt]
                     ]
                 ]
             ],
             'generationConfig' => [
                 'temperature' => $this->temperature,
                 'maxOutputTokens' => 1000,
-            ]
+            ],
         ];
+
+        if ($system !== '') {
+            $payload['systemInstruction'] = [
+                'parts' => [
+                    ['text' => $system]
+                ]
+            ];
+        }
+
+        return $payload;
     }
 
     /**
@@ -262,7 +270,9 @@ class OllamaClient {
         return [
             'inputs' => $prompt,
             'parameters' => [
-                'max_length' => 500,
+                'max_new_tokens' => 500,
+                'return_full_text' => false,
+                'temperature' => $this->temperature,
             ]
         ];
     }
@@ -279,20 +289,61 @@ class OllamaClient {
         if (strpos($endpoint, 'generativelanguage.googleapis.com') !== false) {
             return 'google';
         }
+        if (strpos($endpoint, 'router.huggingface.co') !== false || strpos($endpoint, 'api-inference.huggingface.co') !== false || strpos($endpoint, 'hf.co') !== false) {
+            return 'huggingface';
+        }
         if (strpos($endpoint, 'openai.com') !== false) {
             return 'openai';
         }
         if (strpos($endpoint, 'openrouter.ai') !== false) {
             return 'openrouter';
         }
-        if (strpos($endpoint, 'huggingface.co') !== false) {
-            return 'huggingface';
-        }
         if (strpos($endpoint, '/api/generate') !== false) {
             return 'ollama';
         }
         
         return 'openai'; // Default
+    }
+
+    /**
+     * Normalizar endpoint remoto para el proveedor elegido.
+     */
+    private function normalizeRemoteEndpoint(string $endpoint, string $model, string $apiType): string {
+        $endpoint = trim($endpoint);
+        if ($endpoint === '') {
+            return $endpoint;
+        }
+
+        if ($apiType !== 'google' && $apiType !== 'huggingface') {
+            return $endpoint;
+        }
+
+        if ($apiType === 'google' && strpos($endpoint, ':generateContent') !== false) {
+            return $endpoint;
+        }
+
+        $endpoint = rtrim($endpoint, '/');
+
+        if ($apiType === 'google' && preg_match('~\/models\/[^\/]+$~', $endpoint)) {
+            return $endpoint . ':generateContent';
+        }
+
+        if ($apiType === 'google') {
+            return $endpoint . '/models/' . rawurlencode($model) . ':generateContent';
+        }
+
+        if ($apiType === 'huggingface' && preg_match('~\/models\/.+$~', $endpoint)) {
+            return $endpoint;
+        }
+
+        if ($apiType === 'huggingface') {
+            if (preg_match('~/chat/completions$~', $endpoint)) {
+                return $endpoint;
+            }
+            return rtrim($endpoint, '/') . '/chat/completions';
+        }
+
+        return $endpoint . '/models/' . rawurlencode($model);
     }
 
     /**
@@ -365,6 +416,8 @@ class OllamaClient {
             $headers[] = 'Authorization: Bearer ' . $this->remoteToken;
         } elseif ($apiType === 'huggingface') {
             $headers[] = 'Authorization: Bearer ' . $this->remoteToken;
+        } elseif ($apiType === 'google') {
+            $headers[] = 'x-goog-api-key: ' . $this->remoteToken;
         }
 
         return $headers;
@@ -396,7 +449,7 @@ class OllamaClient {
         $text = match ($apiType) {
             'groq', 'openai', 'openrouter' => $decoded['choices'][0]['message']['content'] ?? '',
             'google' => $decoded['candidates'][0]['content']['parts'][0]['text'] ?? '',
-            'huggingface' => $decoded[0]['generated_text'] ?? '',
+            'huggingface' => $decoded['choices'][0]['message']['content'] ?? ($decoded['generated_text'] ?? ''),
             'ollama' => $decoded['response'] ?? '',
             default => $decoded['response'] ?? $decoded['text'] ?? '',
         };
@@ -409,9 +462,18 @@ class OllamaClient {
 
         // Validar error
         if ($httpCode >= 400) {
+            $apiMessage = (string) (
+                $decoded['error']['message']
+                ?? $decoded['error']['status']
+                ?? $decoded['error']
+                ?? $decoded['message']
+                ?? "Error HTTP $httpCode"
+            );
+            $friendlyError = $this->friendlyRemoteError($apiType, $apiMessage, $httpCode);
             return [
                 'success' => false,
-                'error' => $decoded['error']['message'] ?? "Error HTTP $httpCode",
+                'error' => $friendlyError,
+                'details' => $apiMessage,
                 'source' => $source,
                 'http_code' => $httpCode,
                 'duration' => $duration,
@@ -437,6 +499,39 @@ class OllamaClient {
             'model' => $decoded['model'] ?? 'unknown',
             'provider' => $this->provider,
         ];
+    }
+
+    /**
+     * Convertir errores técnicos del proveedor remoto en mensajes claros para el usuario.
+     */
+    private function friendlyRemoteError(string $apiType, string $message, int $httpCode): string {
+        $messageLower = strtolower($message);
+
+        if ($apiType === 'google' || $apiType === 'huggingface') {
+            if (strpos($messageLower, 'api key not valid') !== false || strpos($messageLower, 'invalid api key') !== false) {
+                return $apiType === 'google'
+                    ? 'La clave de Gemini no es válida. Revisa que la API key sea correcta y esté activa.'
+                    : 'La clave de Hugging Face no es válida. Revisa que el token sea correcto y tenga permiso para inferencia.';
+            }
+
+            if (strpos($messageLower, 'quota exceeded') !== false || strpos($messageLower, 'resource_exhausted') !== false || strpos($messageLower, 'rate limits') !== false || strpos($messageLower, 'limit: 0') !== false) {
+                return $apiType === 'google'
+                    ? 'Gemini agotó la cuota disponible para este proyecto. Debes cambiar de proyecto, esperar el reinicio de cuota o activar facturación.'
+                    : 'Hugging Face limitó las solicitudes o agotó la cuota disponible. Intenta más tarde o usa otro token/proyecto.';
+            }
+
+            if ($httpCode === 429) {
+                return $apiType === 'google'
+                    ? 'Gemini está limitando las solicitudes por cuota o velocidad. Intenta más tarde.'
+                    : 'Hugging Face está limitando las solicitudes por cuota o velocidad. Intenta más tarde.';
+            }
+        }
+
+        if ($httpCode === 401 || $httpCode === 403) {
+            return 'El proveedor remoto rechazó la autenticación. Revisa la API key.';
+        }
+
+        return $message !== '' ? $message : "Error HTTP $httpCode";
     }
 
     /**

@@ -34,7 +34,7 @@ try {
             foreach ($result['productos'] as &$p) {
                 $p['imagen_url'] = !empty($p['imagen'])
                     ? BASE_URL . '/assets/img/productos/' . $p['imagen']
-                    : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+                    : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
             }
             echo json_encode(['success' => true] + $result);
             break;
@@ -46,7 +46,7 @@ try {
             if (!$p)  { http_response_code(404); echo json_encode(['error' => 'Producto no encontrado']); break; }
             $p['imagen_url'] = !empty($p['imagen'])
                 ? BASE_URL . '/assets/img/productos/' . $p['imagen']
-                : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+                : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
             echo json_encode(['success' => true, 'producto' => $p]);
             break;
 
@@ -63,7 +63,7 @@ try {
             foreach ($items as &$p) {
                 $p['imagen_url'] = !empty($p['imagen'])
                     ? BASE_URL . '/assets/img/productos/' . $p['imagen']
-                    : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+                    : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
             }
             echo json_encode(['success' => true, 'productos' => $items]);
             break;

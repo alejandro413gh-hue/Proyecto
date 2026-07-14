@@ -71,7 +71,7 @@ try {
             foreach ($contenido['items'] as &$item) {
                 $item['imagen_url'] = !empty($item['imagen'])
                     ? BASE_URL . '/assets/img/productos/' . $item['imagen']
-                    : BASE_URL . '/tienda/assets/img/sin-imagen.webp';
+                    : BASE_URL . '/tienda/assets/img/sin-imagen.svg';
             }
             echo json_encode(['success' => true] + $contenido);
             break;

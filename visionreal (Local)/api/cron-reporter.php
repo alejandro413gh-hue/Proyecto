@@ -153,7 +153,7 @@ class CronReporter {
             
             $resultado = [
                 'estado' => 'exitoso',
-                'cantidad_pendientes' => count($pedidosPendientes),
+                'cantidad_pendientes' => $pedidoModel->countAllAdmin('pendiente'),
                 'pedidos' => []
             ];
             

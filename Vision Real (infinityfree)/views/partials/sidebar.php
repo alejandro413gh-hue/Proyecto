@@ -34,6 +34,11 @@ $cur  = basename($_SERVER['PHP_SELF']);
     </a>
 
     <!-- Ventas: todos lo ven -->
+    <a href="<?=BASE_URL?>/views/inventario.php" class="nav-item <?=$cur==='inventario.php'?'active':''?>">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Inventario
+    </a>
+
     <a href="<?=BASE_URL?>/views/ventas.php" class="nav-item <?=$cur==='ventas.php'?'active':''?>">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
       Ventas
@@ -60,14 +65,7 @@ $cur  = basename($_SERVER['PHP_SELF']);
     </a>
     <?php endif; ?>
 
-    <!-- Inventario: todos lo ven -->
 
-    <!-- Inventario: todos lo ven -->
-    <a href="<?=BASE_URL?>/views/inventario.php" class="nav-item <?=$cur==='inventario.php'?'active':''?>">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Inventario
-    </a>
-   
     <?php if(isAdmin()): ?>
     <!-- Descuentos: solo admin -->
     <a href="<?=BASE_URL?>/views/descuentos.php" class="nav-item <?=$cur==='descuentos.php'?'active':''?>">

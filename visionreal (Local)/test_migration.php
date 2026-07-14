@@ -264,6 +264,12 @@ class MigrationTester {
                 'model' => 'gemini-2.0-flash',
                 'available' => true,
             ],
+            'huggingface' => [
+                'name' => 'Hugging Face',
+                'endpoint' => 'https://router.huggingface.co/v1',
+                'model' => 'openai/gpt-oss-20b',
+                'available' => true,
+            ],
         ];
 
         echo "  Proveedores disponibles:\n";

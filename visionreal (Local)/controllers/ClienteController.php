@@ -4,9 +4,10 @@ require_once __DIR__ . '/../models/Cliente.php';
 
 class ClienteController {
     private $m;
-    public function __construct() { 
-        requireLogin(); 
-        $this->m = new Cliente(); 
+
+    public function __construct() {
+        requireLogin();
+        $this->m = new Cliente();
     }
 
     // ===== CREAR CLIENTE (solo desde módulo admin, NO desde POS) =====
@@ -17,8 +18,15 @@ class ClienteController {
         $e = trim($_POST['email'] ?? '');
         $d = trim($_POST['direccion'] ?? '');
         $sexo = trim($_POST['sexo'] ?? 'O');
-        if (empty($n)) return ['error' => 'Nombre obligatorio'];
-        if ($this->m->create($n, $nit, $t, $e, $d, $sexo)) return ['success' => 'Cliente registrado'];
+
+        if (empty($n)) {
+            return ['error' => 'Nombre obligatorio'];
+        }
+
+        if ($this->m->create($n, $nit, $t, $e, $d, $sexo)) {
+            return ['success' => 'Cliente registrado'];
+        }
+
         return ['error' => 'Error al registrar'];
     }
 
@@ -31,16 +39,29 @@ class ClienteController {
         $e = trim($_POST['email'] ?? '');
         $d = trim($_POST['direccion'] ?? '');
         $sexo = trim($_POST['sexo'] ?? 'O');
-        if ($id <= 0 || empty($n)) return ['error' => 'Datos inválidos'];
-        if ($this->m->update($id, $n, $nit, $t, $e, $d, $sexo)) return ['success' => 'Cliente actualizado'];
+
+        if ($id <= 0 || empty($n)) {
+            return ['error' => 'Datos inválidos'];
+        }
+
+        if ($this->m->update($id, $n, $nit, $t, $e, $d, $sexo)) {
+            return ['success' => 'Cliente actualizado'];
+        }
+
         return ['error' => 'Error al actualizar'];
     }
 
     // ===== ELIMINAR CLIENTE =====
     public function delete() {
         $id = intval($_POST['id'] ?? 0);
-        if ($id <= 0) return ['error' => 'ID inválido'];
-        if ($this->m->delete($id)) return ['success' => 'Cliente eliminado'];
+        if ($id <= 0) {
+            return ['error' => 'ID inválido'];
+        }
+
+        if ($this->m->delete($id)) {
+            return ['success' => 'Cliente eliminado'];
+        }
+
         return ['error' => 'Error al eliminar'];
     }
 
@@ -48,25 +69,23 @@ class ClienteController {
     public function buscarOCrear() {
         $documento = trim($_GET['documento'] ?? '');
         $nombre = trim($_GET['nombre'] ?? '');
-        
+
         if (empty($documento) && empty($nombre)) {
             return ['error' => 'Ingrese documento o nombre'];
         }
 
-        // Buscar por documento o nombre
+        $clientes = $this->m->getAll();
         $cliente = null;
+
         if (!empty($documento)) {
-            // Buscar por teléfono como identificador único
-            $clientes = $this->m->getAll();
-            $cliente = array_values(array_filter($clientes, function($c) use ($documento) {
-                return $c['telefono'] === $documento;
+            $cliente = array_values(array_filter($clientes, function ($c) use ($documento) {
+                return (string) ($c['telefono'] ?? '') === $documento;
             }))[0] ?? null;
         }
 
         if (!$cliente && !empty($nombre)) {
-            $clientes = $this->m->getAll();
-            $cliente = array_values(array_filter($clientes, function($c) use ($nombre) {
-                return strtolower($c['nombre']) === strtolower($nombre);
+            $cliente = array_values(array_filter($clientes, function ($c) use ($nombre) {
+                return strtolower((string) ($c['nombre'] ?? '')) === strtolower($nombre);
             }))[0] ?? null;
         }
 
@@ -81,7 +100,6 @@ class ClienteController {
             ];
         }
 
-        // No encontrado: devolver datos para que el usuario complete
         return [
             'encontrado' => false,
             'documento' => $documento,
@@ -97,22 +115,25 @@ class ClienteController {
         $e = trim($_POST['email'] ?? '');
         $d = trim($_POST['direccion'] ?? '');
 
-        if (empty($n)) return ['error' => 'El nombre es obligatorio'];
-        if (empty($documento)) return ['error' => 'El documento/teléfono es obligatorio'];
+        if (empty($n)) {
+            return ['error' => 'El nombre es obligatorio'];
+        }
+        if (empty($documento)) {
+            return ['error' => 'El documento/teléfono es obligatorio'];
+        }
 
-        // Validar que no exista
         $clientes = $this->m->getAll();
-        $existe = array_filter($clientes, function($c) use ($documento) {
-            return $c['telefono'] === $documento;
+        $existe = array_filter($clientes, function ($c) use ($documento) {
+            return (string) ($c['telefono'] ?? '') === $documento;
         });
-        
+
         if (!empty($existe)) {
             return ['error' => 'Este documento ya está registrado'];
         }
 
         if ($this->m->create($n, $documento, $e, $d)) {
             $db = Database::getInstance();
-            $id = $db->insert_id;
+            $id = $db->lastInsertId();
             return [
                 'success' => true,
                 'id' => $id,
@@ -120,42 +141,60 @@ class ClienteController {
                 'documento' => $documento
             ];
         }
+
         return ['error' => 'Error al crear el cliente'];
     }
-}
 
     // ===== VALIDAR CLIENTE ANTES DE VENTA =====
     public function validarParaVenta() {
         $cliente_id = intval($_POST['cliente_id'] ?? 0);
-        if ($cliente_id <= 0) return ['error' => 'Cliente es requerido'];
-        
+        if ($cliente_id <= 0) {
+            return ['error' => 'Cliente es requerido'];
+        }
+
         $cliente = $this->m->getById($cliente_id);
-        if (!$cliente) return ['error' => 'Cliente no encontrado'];
-        
+        if (!$cliente) {
+            return ['error' => 'Cliente no encontrado'];
+        }
+
         return ['success' => true, 'cliente' => $cliente];
     }
 }
 
-if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['action'])){
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
-    $c=new ClienteController();
-    switch($_POST['action']){
-        case'create':echo json_encode($c->create());break;
-        case'update':echo json_encode($c->update());break;
-        case'delete':echo json_encode($c->delete());break;
-        case'crear_desde_venta':echo json_encode($c->crearDesdeVenta());break;
-        case'validar_para_venta':echo json_encode($c->validarParaVenta());break;
-        default:echo json_encode(['error'=>'Acción inválida']);
+    $c = new ClienteController();
+    switch ($_POST['action']) {
+        case 'create':
+            echo json_encode($c->create());
+            break;
+        case 'update':
+            echo json_encode($c->update());
+            break;
+        case 'delete':
+            echo json_encode($c->delete());
+            break;
+        case 'crear_desde_venta':
+            echo json_encode($c->crearDesdeVenta());
+            break;
+        case 'validar_para_venta':
+            echo json_encode($c->validarParaVenta());
+            break;
+        default:
+            echo json_encode(['error' => 'Acción inválida']);
     }
     exit();
 }
 
-if($_SERVER['REQUEST_METHOD']==='GET'&&isset($_GET['action'])){
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
     header('Content-Type: application/json');
-    $c=new ClienteController();
-    switch($_GET['action']){
-        case'buscar_o_crear':echo json_encode($c->buscarOCrear());break;
-        default:echo json_encode(['error'=>'Acción inválida']);
+    $c = new ClienteController();
+    switch ($_GET['action']) {
+        case 'buscar_o_crear':
+            echo json_encode($c->buscarOCrear());
+            break;
+        default:
+            echo json_encode(['error' => 'Acción inválida']);
     }
     exit();
 }

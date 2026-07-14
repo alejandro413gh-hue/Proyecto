@@ -1,12 +1,18 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../models/Venta.php';
+require_once __DIR__ . '/../models/Factura.php';
+require_once __DIR__ . '/../models/Cliente.php';
 
 class VentaController {
     private $m;
+    private $facturas;
+    private $clientes;
     public function __construct() {
         requireLogin();
-        $this->m  = new Venta();
+        $this->m = new Venta();
+        $this->facturas = new Factura();
+        $this->clientes = new Cliente();
     }
 
     public function create() {
@@ -28,7 +34,7 @@ class VentaController {
 
         $subtotal = array_sum(array_map(fn($p) => $p['precio'] * $p['cantidad'], $productos));
 
-        return $this->m->create(
+        $venta = $this->m->create(
             $cliente_id,
             $_SESSION['user_id'],
             $productos,
@@ -39,6 +45,40 @@ class VentaController {
             $descuento_id,
             $descuento_aplicado
         );
+
+        if (!($venta['success'] ?? false)) {
+            return $venta;
+        }
+
+        $ventaId = (int) ($venta['venta_id'] ?? 0);
+        $clienteNombre = 'Consumidor Final';
+        $clienteDocumento = 'CF';
+        $clienteTelefono = '';
+
+        if ($cliente_id) {
+            $cliente = $this->clientes->getById((int) $cliente_id);
+            if ($cliente) {
+                $clienteNombre = trim((string) ($cliente['nombre'] ?? $clienteNombre));
+                $clienteDocumento = trim((string) ($cliente['nit'] ?? '')) ?: $clienteDocumento;
+                $clienteTelefono = trim((string) ($cliente['telefono'] ?? ''));
+                if ($clienteDocumento === 'CF' && $clienteTelefono !== '') {
+                    $clienteDocumento = $clienteTelefono;
+                }
+            }
+        }
+
+        $factura = $this->facturas->crear(
+            $ventaId,
+            $clienteNombre,
+            $clienteDocumento,
+            (float) $subtotal,
+            (float) $descuento,
+            (float) ($venta['total'] ?? max(0, $subtotal - $descuento)),
+            $clienteTelefono
+        );
+
+        $venta['factura'] = $factura;
+        return $venta;
     }
 }
 

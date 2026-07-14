@@ -83,11 +83,6 @@ switch ($action) {
         }
         $cliente = getTiendaCliente();
         $ok = $cm->actualizarPerfil($cliente['id'], $_POST);
-        if ($ok) {
-            // Actualizar sesión
-            $_SESSION['cliente_online_nombre'] = trim($_POST['nombre'] ?? '');
-            $_SESSION['cliente_online_sexo']   = $_POST['sexo'] ?? 'O';
-        }
         echo json_encode($ok ? ['success' => true] : ['error' => 'Error al actualizar']);
         break;
 
